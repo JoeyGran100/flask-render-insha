@@ -1055,34 +1055,33 @@ def getUserInfoById(user_profile_id):
 @app.route('/userCharacter', methods=['POST'])
 def postUserCharacter():
     try:
-        data = request.get_json()
-        user_profile_id = data['user_profile_id']
+        data = request.get_json(force=True)
 
-        # Find the corresponding profile
+        user_profile_id = data.get('user_profile_id')
+        if not user_profile_id:
+            return jsonify({'error': 'user_profile_id is required'}), 400
+
         profile = UserProfile.query.get(user_profile_id)
         if not profile:
             return jsonify({'error': 'UserProfile not found'}), 404
 
-        # Check if character already exists
         character = profile.character
-        if character:
-            message = "Updated user character"
-        else:
-            character = UserCharacter(profile=profile)
+        if not character:
+            character = UserCharacter(user_profile_id=profile.id)
             db.session.add(character)
-            message = "Created user character"
 
-        # Update fields
         character.muslimstatus = data.get('muslimstatus')
         character.practicing = data.get('practicing')
         character.nationality = data.get('nationality')
         character.personality_type = data.get('personality_type')
 
         db.session.commit()
-        return jsonify({'message': message}), 200
+        return jsonify({'message': 'User character saved'}), 200
 
     except Exception as e:
-        return jsonify({'error': f'Internal Server Error: {e}'}), 500
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 
 # get ALL users character
 @app.route('/userCharacter', methods=['GET'])
