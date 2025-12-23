@@ -887,50 +887,31 @@ def postData():
 
 @app.route('/userProfile', methods=['POST'])
 def postUserProfileData():
-    try:
-        data = request.get_json()
+    data = request.get_json()
 
-        user_id = data['user_id']
-        user = Task.query.get(user_id)
+    user_id = data['user_auth_id']
+    user = Task.query.get(user_id)
 
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
 
-        profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
+    profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
 
-        if profile:
-            message = "Updated user profile"
-        else:
-            profile = UserProfile(user_auth_id=user.id)
-            db.session.add(profile)
-            message = "Created user profile"
+    if not profile:
+        profile = UserProfile(user_auth_id=user.id)
+        db.session.add(profile)
 
-        # Update fields
-        profile.firstname = data.get('firstname')
-        profile.lastname = data.get('lastname')
-        profile.gender = data.get('gender')
-        profile.email = user.email  # keep in sync
-        profile.phone_number = data.get('phone_number')
-        profile.age = data.get('age')
-        profile.sect = data.get('sect')
-        profile.lookingfor = data.get('lookingfor')
-        
-        # Preferences (separate table)
-        if profile.preferences:
-            prefs = profile.preferences
-        else:
-            prefs = UserInfo(profile=profile)
-            db.session.add(prefs)
+    profile.firstname = data.get('firstname')
+    profile.lastname = data.get('lastname')
+    profile.gender = data.get('gender')
+    profile.email = data.get('email')
+    profile.phone_number = data.get('phone_number')
+    profile.age = data.get('age')
+    profile.sect = data.get('sect')
+    profile.lookingfor = data.get('lookingfor')
 
-        prefs.hobbies = data.get('hobbies')
-        prefs.preferences = data.get('preferences')
-        prefs.bio = data.get('bio')
-
-        db.session.commit()
-        return jsonify({'message': message}), 200
-
-    except Exception as e:
-        return jsonify({'error': 'Internal Server Error'}), 500
+    db.session.commit()
+    return jsonify({'message': 'Profile saved'}), 200
 
 
 @app.route('/userProfile', methods=['GET'])
