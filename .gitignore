@@ -1,6 +1,21 @@
-.env
-extras/
-__pycache__
+# Virtual environments
+venv/
+.env/
+.venv/
+env/
+
+# Python cache
+__pycache__/
 **/__pycache__/
+*.pyc
+
+# IDEs
 .idea/
-migrations
+.vscode/
+
+# Flask / Python
+instance/
+migrations/
+
+# OS files
+.DS_Store
