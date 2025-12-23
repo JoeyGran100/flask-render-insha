@@ -2,7 +2,6 @@ import random
 from datetime import datetime, timezone
 import re
 from email.policy import default
-
 from flask import Flask, jsonify, request, session, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, join_room, send, emit
@@ -17,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://wingstest1_render_example_i686_user:potZ9JickG4bSl1f2PYy6LxNc9z8YkwO@dpg-d4tbnhkhg0os73cqms8g-a.frankfurt-postgres.render.com/wingstest1_render_example_i686"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp1_render_example_user:H5Qw63yLCisIPStEnA3nTynjZe3wxZ2N@dpg-d55cciili9vc73cgu7a0-a.frankfurt-postgres.render.com/inshaapp1_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -45,6 +44,63 @@ class Task(db.Model):
     password = db.Column(db.String, nullable=False)
 
 
+class UserProfile(db.Model):
+    __tablename__ = 'user_profile'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_auth_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),nullable=False,unique=True)
+    firstname = db.Column(db.String(255))
+    lastname = db.Column(db.String(255))
+    gender = db.Column(db.String(50))
+    email = db.Column(db.String(200))
+    age = db.Column(db.String(10))
+    phone_number = db.Column(db.String(50))
+    sect = db.Column(db.String(50))
+    lookingfor = db.Column(db.String(50))
+    
+    user = db.relationship('Task', backref=db.backref('profile', uselist=False))
+
+
+class UserPreferences(db.Model):
+    __tablename__ = 'user_preferences'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_profile_id = db.Column(db.Integer,db.ForeignKey('user_profile.id'),nullable=False,unique=True)
+    hobbies = db.Column(db.ARRAY(db.String))
+    preferences = db.Column(db.ARRAY(db.String))
+    bio = db.Column(db.Text)
+    alcoholstatus = db.Column(db.String(25))
+    childrenstatus = db.Column(db.String(25))
+    maritalstatus = db.Column(db.String(25))
+    smokestatus = db.Column(db.String(25))
+    halalfood = db.Column(db.String(25))
+
+    profile = db.relationship('UserProfile',backref=db.backref('preferences', uselist=False))
+
+
+class UserCharacter(db.Model):
+    __tablename__ = 'user_character'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_profile_id = db.Column(db.Integer,db.ForeignKey('user_profile.id'),nullable=False,unique=True)
+    muslimstatus = db.Column(db.String(25))
+    practicing = db.Column(db.String(25))
+    nationality = db.Column(db.String(50))
+
+    personality_type = db.Column(db.String(100))
+
+    profile = db.relationship('UserProfile',backref=db.backref('character', uselist=False))
+
+
+class UserImages(db.Model):
+    __tablename__ = 'userImage'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_auth_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
+    email = db.Column(db.String(200))  # Ensure this column exists
+    imageString = db.Column(db.String())
+    user = db.relationship('Task', backref=db.backref('user_image', lazy=True))
+
+
 class Message(db.Model):
     __tablename__ = 'messages'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -55,44 +111,6 @@ class Message(db.Model):
 
     sender = db.relationship('Task', foreign_keys=[sender_id], backref=db.backref('sent_messages', lazy=True))
     receiver = db.relationship('Task', foreign_keys=[receiver_id], backref=db.backref('received_messages', lazy=True))
-
-
-class UserData(db.Model):
-    __tablename__ = 'userdata'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_auth_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
-
-    firstname = db.Column(db.String(255))
-    lastname = db.Column(db.String(255))
-    email = db.Column(db.String(200))
-    gender = db.Column(db.String(50))  # Keep gender here
-    hobbies = db.Column(db.ARRAY(db.String))
-    preferences = db.Column(db.ARRAY(db.String))
-    phone_number = db.Column(db.String(50))
-    age = db.Column(db.String(10))
-    bio = db.Column(db.Text)
-
-    user = db.relationship('Task', backref=db.backref('user_data', uselist=False))
-
-
-class RelationshipData(db.Model):
-    __tablename__ = 'relationshipData'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_auth_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
-    email = db.Column(db.String(200))
-    lookingfor = db.Column(db.String(255))
-    openfor = db.Column(db.String(255))
-
-    user = db.relationship('Task', backref=db.backref('get_relationship_data', lazy=True))
-
-
-class UserImages(db.Model):
-    __tablename__ = 'userImage'
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_auth_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
-    email = db.Column(db.String(200))  # Ensure this column exists
-    imageString = db.Column(db.String())
-    user = db.relationship('Task', backref=db.backref('user_image', lazy=True))
 
 
 class EventHost(db.Model):
@@ -212,236 +230,6 @@ with app.app_context():
 
 def has_user_checked_in(user_id, location_id):
     return db.session.query(CheckIn).filter_by(user_id=user_id, location_id=location_id).first() is not None
-
-
-@app.route('/preference', methods=['POST'])
-def set_preference():
-    try:
-        data = request.get_json()
-        user_email = data.get('user_email')
-        preferred_user_email = data.get('preferred_user_email')
-        preference = data.get('preference')  # 'like', 'reject', 'save_later'
-
-        # Validate inputs
-        if not user_email or not preferred_user_email or not preference:
-            return jsonify({'error': 'Missing required fields'}), 400
-
-        if preference not in ['like', 'reject', 'save_later']:
-            return jsonify({'error': 'Invalid preference type'}), 400
-
-        # Get user IDs from emails
-        user = Task.query.filter_by(email=user_email).first()
-        preferred_user = Task.query.filter_by(email=preferred_user_email).first()
-
-        if not user or not preferred_user:
-            return jsonify({'error': 'One or both users not found'}), 404
-
-        # Check if preference already exists
-        existing_preference = UserPreference.query.filter_by(
-            user_id=user.id,
-            preferred_user_id=preferred_user.id
-        ).first()
-
-        if existing_preference:
-            # Update existing preference
-            existing_preference.preference = preference
-            existing_preference.timestamp = datetime.now(timezone.utc)
-        else:
-            # Create new preference
-            new_preference = UserPreference(
-                user_id=user.id,
-                preferred_user_id=preferred_user.id,
-                preference=preference
-            )
-            db.session.add(new_preference)
-
-        if preference == 'reject':
-            user1_id = user.id
-            user2_id = preferred_user.id
-
-            # Check if there's an existing match
-            existing_match = Match.query.filter(
-                or_(
-                    and_(Match.user1_id == user1_id, Match.user2_id == user2_id),
-                    and_(Match.user1_id == user2_id, Match.user2_id == user1_id)
-                )
-            ).first()
-
-            # Case II: One or both users rejected
-            if existing_match:
-                # Mark match as deleted
-                existing_match.status = 'deleted'
-
-        # Check if this creates a match
-        process_potential_match(user.id, preferred_user.id)
-
-        db.session.commit()
-
-        return jsonify({'message': f'Preference set to {preference}'}), 201
-
-    except Exception as e:
-        print(f"Error in set_preference: {str(e)}")
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-
-@app.route('/matches/<email>', methods=['GET'])
-def get_user_matches(email):
-    try:
-        user = Task.query.filter_by(email=email).first()
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-
-        # Get all matches for this user that are visible now
-        current_time = datetime.now(timezone.utc)
-        matches = Match.query.filter(
-            or_(
-                Match.user1_id == user.id,
-                Match.user2_id == user.id
-            ),
-            Match.status != 'deleted',
-            Match.visible_after <= get_unix_timestamp(current_time)
-        ).all()
-
-        # Format the response
-        result = []
-        for match in matches:
-            # Determine the other user ID
-            other_user_id = match.user2_id if match.user1_id == user.id else match.user1_id
-            other_user = Task.query.get(other_user_id)
-            other_user_data = UserData.query.filter_by(user_auth_id=other_user_id).first()
-
-            if not other_user or not other_user_data:
-                continue
-
-            # Get user preferences
-            user_pref = UserPreference.query.filter_by(
-                user_id=user.id, preferred_user_id=other_user_id
-            ).first()
-
-            other_pref = UserPreference.query.filter_by(
-                user_id=other_user_id, preferred_user_id=user.id
-            ).first()
-
-            # Determine match status from user's perspective
-            if match.status == 'active':
-                # Both liked each other
-                display_status = 'matched'
-                show_message_button = True
-            else:  # status is 'pending'
-                if user_pref and user_pref.preference == 'save_later':
-                    display_status = 'decide'  # User needs to decide
-                    show_message_button = False
-                elif other_pref and other_pref.preference == 'save_later':
-                    display_status = 'pending'  # Waiting for other user
-                    show_message_button = False
-                else:
-                    display_status = 'pending'  # Generic pending
-                    show_message_button = False
-
-            # Get profile image
-            user_image = UserImages.query.filter_by(user_auth_id=other_user_id).first()
-            image_url = None
-            if user_image and user_image.imageString:
-                image_url = request.host_url + 'uploads/' + user_image.imageString
-
-            # Add match to result
-            result.append({
-                'match_id': match.id,
-                'user_id': other_user_id,
-                'firstname': other_user_data.firstname,
-                'email': other_user.email,
-                'age': other_user_data.age,
-                'bio': other_user_data.bio,
-                'status': display_status,
-                'show_message_button': show_message_button,
-                'match_date': match.match_date,
-                'image_url': image_url
-            })
-
-        return jsonify({'matches': result}), 200
-
-    except Exception as e:
-        print(f"Error in get_user_matches: {str(e)}")
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-
-# Only for users that are saved for later and waiting a decision (accept or reject) inside Matches screen on frontend -> Post their decision
-@app.route('/update_match_status', methods=['POST'])
-def update_match_status():
-    try:
-        data = request.get_json()
-        match_id = data.get('match_id')
-        user_email = data.get('user_email')
-        decision = data.get('decision')  # 'accept' or 'reject'
-
-        # Validate inputs
-        if not match_id or not user_email or not decision:
-            return jsonify({'error': 'Missing required fields'}), 400
-
-        if decision not in ['accept', 'reject']:
-            return jsonify({'error': 'Invalid decision'}), 400
-
-        # Get user
-        user = Task.query.filter_by(email=user_email).first()
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
-
-        # Get match
-        match = Match.query.get(match_id)
-        if not match:
-            return jsonify({'error': 'Match not found'}), 404
-
-        # Verify user is part of this match
-        if match.user1_id != user.id and match.user2_id != user.id:
-            return jsonify({'error': 'User not authorized to update this match'}), 403
-
-        # Determine other user ID
-        other_user_id = match.user2_id if match.user1_id == user.id else match.user1_id
-
-        # Update user preference based on decision
-        if decision == 'accept':
-            pref = UserPreference.query.filter_by(
-                user_id=user.id, preferred_user_id=other_user_id
-            ).first()
-
-            if pref:
-                pref.preference = 'like'
-            else:
-                new_pref = UserPreference(
-                    user_id=user.id,
-                    preferred_user_id=other_user_id,
-                    preference='like'
-                )
-                db.session.add(new_pref)
-
-            # Check if this creates a match
-            process_potential_match(user.id, other_user_id)
-
-        else:  # decision == 'reject'
-            pref = UserPreference.query.filter_by(
-                user_id=user.id, preferred_user_id=other_user_id
-            ).first()
-
-            if pref:
-                pref.preference = 'reject'
-            else:
-                new_pref = UserPreference(
-                    user_id=user.id,
-                    preferred_user_id=other_user_id,
-                    preference='reject'
-                )
-                db.session.add(new_pref)
-
-            # Mark match as deleted
-            match.status = 'deleted'
-
-        db.session.commit()
-
-        return jsonify({'message': f'Match {decision}ed successfully'}), 200
-
-    except Exception as e:
-        print(f"Error in update_match_status: {str(e)}")
-        return jsonify({'error': 'Internal Server Error'}), 500
 
 
 # I changed this, be aware!
@@ -581,7 +369,7 @@ def get_user_matches(user_id, limit=5):
     """Get top matches for a user"""
     try:
         # First get the user's gender
-        user = UserData.query.filter_by(user_auth_id=user_id).first()
+        user = UserProfile.query.filter_by(user_auth_id=user_id).first()
         if not user:
             print(f"No user found for ID: {user_id}")
             return []
@@ -619,10 +407,10 @@ def get_user_matches(user_id, limit=5):
         preferred_users = set([pref.preferred_user_id for pref in existing_preferences])
 
         # Find potential matches (users of opposite gender not already matched/preferred)
-        potential_matches = UserData.query.filter(
-            UserData.gender.in_(target_gender),
-            UserData.user_auth_id != user_id,
-            ~UserData.user_auth_id.in_(matched_users.union(preferred_users))
+        potential_matches = UserProfile.query.filter(
+            UserProfile.gender.in_(target_gender),
+            UserProfile.user_auth_id != user_id,
+            ~UserProfile.user_auth_id.in_(matched_users.union(preferred_users))
         ).all()
 
         # Calculate match scores and sort
@@ -666,7 +454,7 @@ def match_all_users():
     """Match all users with someone from opposite gender"""
     try:
         # Get all users with complete profiles
-        all_users = UserData.query.all()
+        all_users = UserProfile.query.all()
 
         # Initialize results dictionary
         matches = {}
@@ -785,905 +573,11 @@ def match_all_users():
         return {}
 
 
-# Given a user id returns the best 5 matches sorted
-@app.route('/match/<int:user_id>', methods=['GET'])
-def get_matches_endpoint(user_id):
-    matches = get_user_matches(user_id)
-    return jsonify({
-        'user_id': user_id,
-        'matches': matches
-    })
-
-
-# Get all users best matches
-@app.route('/matches', methods=['GET'])
-def get_all_matches():
-    matches = match_all_users()
-    return jsonify({'matches': matches})
-
-
-# METHOD TO GET AUTHENTICATED USERS LIST
-@app.get("/users")
-def home():
-    tasks = Task.query.all()
-    task_list = [
-        {'id': task.id, 'email': task.email, 'password': task.password} for task in tasks
-    ]
-    return jsonify({"user_details": task_list})
-
-
-# POSTING USER DATA TO DATABASE
-@app.route('/massUserData', methods=['POST'])
-def mass_update_user_data():
-    try:
-
-        data = request.get_json()
-
-        users = data.get('users')
-
-        for userData in users:
-            newEmail = userData['email']
-            user = Task.query.filter_by(email=newEmail).first()
-
-            if not user:
-                continue
-
-            user_auth_id = user.id
-            firstname = userData['firstname']
-            lastname = userData['lastname']
-            gender = userData['gender']
-            hobbies = userData['hobbies']
-            preferences = userData['preferences']
-            phone_number = userData['phone_number']
-            age = userData['age']
-            bio = userData['bio']
-
-            # Check if user details already exist
-            userDetails = UserData.query.filter_by(user_auth_id=user_auth_id).first()
-
-            if userDetails:
-                # Update existing user details
-                userDetails.firstname = firstname
-                userDetails.lastname = lastname
-                userDetails.email = newEmail
-                userDetails.gender = gender
-                userDetails.hobbies = hobbies
-                userDetails.preferences = preferences
-                userDetails.phone_number = phone_number
-                userDetails.age = age
-                userDetails.bio = bio
-
-                print(f'Updated user details: {newEmail}')
-
-            else:
-                # Add new user details
-                userDetails = UserData(
-                    user_auth_id=user_auth_id,
-                    firstname=firstname,
-                    lastname=lastname,
-                    email=newEmail,
-                    gender=gender,
-                    hobbies=hobbies,
-                    preferences=preferences,
-                    phone_number=phone_number,
-                    age=age,
-                    bio=bio
-                )
-                db.session.add(userDetails)
-                print(f'Added user details: {newEmail}')
-
-        db.session.commit()
-
-        return jsonify({'message': 'Users data updated'}), 201
-
-    except Exception as e:
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-
-@app.route('/create_all', methods=['POST'])
-def mass_create_users():
-    try:
-        data = request.get_json()
-        user_details = data.get('user_details')
-
-        if not user_details:
-            return jsonify({'error': 'List required'}), 400
-
-        for user in user_details:
-            new_email = user.get('email')
-            new_password = user.get('password')
-
-            if not new_email or not new_password:
-                continue
-
-            # Validate email format
-            email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-            if not re.match(email_regex, new_email):
-                continue
-
-            # Check if the email already exists
-            existing_user = Task.query.filter_by(email=new_email).first()
-            if existing_user:
-                continue
-
-            # Create new user
-            newUserDetails = Task(email=new_email, password=new_password)
-            db.session.add(newUserDetails)
-            db.session.commit()
-            print(f'New user created email: {new_email}')
-
-        return jsonify({'message': "New Users added"}), 201
-
-    except Exception as e:
-        print(e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-
-# POST USER CREDENTIALS TO DATABASE
-@app.route('/users', methods=['POST'])
-def postData():
-    try:
-        data = request.get_json()
-        new_email = data.get('email')
-        new_password = data.get('password')
-
-        if not new_email or not new_password:
-            return jsonify({'error': 'Email and password are required'}), 400
-
-        # Validate email format
-        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-        if not re.match(email_regex, new_email):
-            return jsonify({'message': 'Invalid email format'}), 400
-
-        # Check if email already exists
-        existing_user = Task.query.filter_by(email=new_email).first()
-        if existing_user:
-            return jsonify({'message': 'Email already exists'}), 400
-
-        # Create new user in Task table
-        new_user = Task(email=new_email, password=new_password)
-        db.session.add(new_user)
-        db.session.commit()
-
-        # Return the id of the created user (to use as user_auth_id later)
-        return jsonify({
-            'message': 'User added successfully',
-            'user_auth_id': new_user.id
-        }), 201
-
-    except IntegrityError as ie:
-        # Rollback in case of unique constraint violations
-        db.session.rollback()
-        return jsonify({'message': 'Email already exists'}), 400
-
-    except Exception as e:
-        db.session.rollback()
-        print("Signup error:", e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-
-
-
-# POSTING USER DATA TO DATABASE
-@app.route('/userData', methods=['POST'])
-def postUserData():
-    try:  # Added closing parenthesis here
-        data = request.get_json()
-        newEmail = data['email']
-        user = Task.query.filter_by(email=newEmail).first()
-
-        if not user:
-            return jsonify({'error': "No User registered with this mail"}), 400
-
-        user_auth_id = user.id
-        firstname = data['firstname']
-        lastname = data['lastname']
-        gender = data['gender']
-        hobbies = data['hobbies']
-        preferences = data['preferences']
-        phone_number = data['phone_number']
-        age = data['age']
-        bio = data['bio']
-
-        # Check if user details already exist
-        userDetails = UserData.query.filter_by(user_auth_id=user_auth_id).first()
-
-        if userDetails:
-            # Update existing user details
-            userDetails.firstname = firstname
-            userDetails.lastname = lastname
-            userDetails.email = newEmail
-            userDetails.gender = gender
-            userDetails.hobbies = hobbies
-            userDetails.preferences = preferences
-            userDetails.phone_number = phone_number
-            userDetails.age = age
-            userDetails.bio = bio
-
-            message = "Updated user details"
-        else:
-            # Add new user details
-            userDetails = UserData(
-                user_auth_id=user_auth_id,
-                firstname=firstname,
-                lastname=lastname,
-                email=newEmail,
-                gender=gender,
-                hobbies=hobbies,
-                preferences=preferences,
-                phone_number=phone_number,
-                age=age,
-                bio=bio
-            )
-            db.session.add(userDetails)
-            message = "Added user details"
-
-        db.session.commit()
-        return jsonify({'message': message}), 201
-
-    except Exception as e:
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-
-@app.route('/userData/<int:user_auth_id>', methods=['PUT'])
-def update_user_data(user_auth_id):
-    try:
-        data = request.get_json(force=True)
-
-        if not data:
-            return jsonify({"error": "Missing JSON body"}), 400
-
-        user_details = UserData.query.filter_by(
-            user_auth_id=user_auth_id
-        ).first()
-
-        if not user_details:
-            return jsonify({'error': 'User details not found'}), 404
-
-        # Update ONLY if key exists (important)
-        if 'firstname' in data:
-            user_details.firstname = data['firstname']
-
-        if 'lastname' in data:
-            user_details.lastname = data['lastname']
-
-        if 'gender' in data:
-            user_details.gender = data['gender']
-
-        if 'hobbies' in data:
-            user_details.hobbies = data['hobbies']
-
-        if 'preferences' in data:
-            user_details.preferences = data['preferences']
-
-        if 'phone_number' in data:
-            user_details.phone_number = data['phone_number']
-
-        if 'age' in data:
-            user_details.age = data['age']
-
-        if 'bio' in data:
-            user_details.bio = data['bio']
-
-        db.session.commit()
-
-        return jsonify({
-            "user_auth_id": user_details.user_auth_id,
-            "firstname": user_details.firstname,
-            "lastname": user_details.lastname,
-            "email": user_details.email,
-            "phone_number": user_details.phone_number,
-            "age": user_details.age,
-            "bio": user_details.bio
-        }), 200
-
-    except Exception as e:
-        db.session.rollback()
-        print("Update user error:", e)
-        return jsonify({'error': str(e)}), 500
-
-
-
-# POSTING Relationships DATA TO DATABASE 2025
-@app.route('/relationshipData', methods=['POST'])
-def postRelationshipsData():
-    try:
-        # Extract data from the request
-        data = request.get_json()
-        new_email = data['email']
-        lookingfor = data['lookingfor']
-        openfor = data['openfor']
-
-        # Validate input
-        if not new_email or not lookingfor or not openfor:
-            return jsonify({"error": "Missing required fields"}), 400
-
-        # Fetch the user by email
-        user = Task.query.filter_by(email=new_email).first()
-
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-
-        user_auth_id = user.id
-        lookingfor = data['lookingfor']
-        openfor = data['openfor']
-
-        # Check if the user already has preferences
-        userrelationshipsDetails = RelationshipData.query.filter_by(user_auth_id=user_auth_id).first()
-
-        if userrelationshipsDetails:
-            # Update existing preference
-            userrelationshipsDetails.lookingfor = lookingfor
-            userrelationshipsDetails.openfor = openfor
-            userrelationshipsDetails.email = new_email
-
-            message = "Updated user relationshipData"
-        else:
-            # Create new preference
-            userrelationshipsDetails = RelationshipData(
-                user_auth_id=user_auth_id,
-                email=new_email,
-                lookingfor=lookingfor,
-                openfor=openfor
-            )
-            db.session.add(userrelationshipsDetails)
-            message = "Added new user relationshipData"
-
-        # Commit changes to the database
-        db.session.commit()
-        return jsonify({'message': message}), 201
-
-    except Exception as e:
-        print(f"Error: {e}")
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-    # @app.route('/userLocation', methods=['POST'])
-    # def post_user_location():
-    try:
-        data = request.get_json()
-
-        user_id = data.get('id')
-        lat = data.get('lat')
-        lng = data.get('lng')
-        radius = data.get('radius')
-
-        # Validate input
-        if user_id is None or lat is None or lng is None or radius is None:
-            return jsonify({"error": "Missing required fields"}), 400
-
-        # Check if user exists
-        user = Task.query.filter_by(id=user_id).first()
-        if not user:
-            return jsonify({"error": "User not found"}), 404
-
-        # Check if user location already exists
-        existing_location = UserLocation.query.filter_by(id=user_id).first()
-
-        if existing_location:
-            # Update existing
-            existing_location.lat = lat
-            existing_location.lng = lng
-            existing_location.radius = radius
-            message = "Updated user location"
-        else:
-            # Create new
-            new_location = UserLocation(
-                id=user_id,  # only if your PK is intended to match the user's id
-                lat=lat,
-                lng=lng,
-                radius=radius
-            )
-            db.session.add(new_location)
-            message = "Added new user location"
-
-        db.session.commit()
-        return jsonify({"message": message, "id": user_id}), 201
-
-    except Exception as e:
-        print(f"Error: {e}")
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-
-@app.route('/upload_image', methods=['POST'])
-def upload_image():
-    try:
-        # Check if the request contains a file
-        if 'image' not in request.files:
-            return jsonify({"error": "No image file provided"}), 400
-
-        file = request.files['image']
-        new_email = request.form.get('email')
-
-        # Check if email is provided
-        if not new_email:
-            return jsonify({"error": "Email is required"}), 400
-
-        user = Task.query.filter_by(email=new_email).first()
-
-        if not user:
-            return jsonify({'error': "No user registered with this email"}), 400
-
-        user_auth_id = user.id
-
-        # Check if the file is allowed
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-
-            # Save the file in the 'uploads' folder
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
-
-            # Check if an image already exists for this user
-            user_image = UserImages.query.filter_by(user_auth_id=user_auth_id).first()
-
-            if user_image:
-                # Update existing image
-                user_image.imageString = filename
-                message = "Updated user image"
-            else:
-                # Add new image
-                user_image = UserImages(
-                    user_auth_id=user_auth_id,
-                    email=new_email,
-                    imageString=filename
-                )
-                db.session.add(user_image)
-                message = "Added new user image"
-
-            db.session.commit()
-
-            # Generate the image URL
-            image_url = request.host_url + 'uploads/' + filename
-            return jsonify({"message": message, "image_url": image_url}), 201
-
-        else:
-            return jsonify({"error": "Invalid image format"}), 400
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
-
-
-@app.route('/get_image/<int:user_auth_id>', methods=['GET'])
-def get_image(user_auth_id):
-    # Query the database for a single record matching the user_auth_id
-    user_image = UserImages.query.filter_by(user_auth_id=user_auth_id).first()
-
-    if user_image:
-        # Return the image as an object
-        return jsonify({
-            "id": user_image.id,
-            "email": user_image.email,
-            "user_auth_id": user_image.user_auth_id,
-            "imageString": user_image.imageString
-        }), 200
-    else:
-        return jsonify({"error": "No image found for the given user_auth_id"}), 404
-
-
-@app.route('/userData', methods=['GET'])
-def getUserData():
-    try:
-        # Query all user details
-        userDetailsList = UserData.query.all()
-
-        # Prepare the response data
-        users = []
-        for userDetails in userDetailsList:
-            user_image = UserImages.query.filter_by(user_auth_id=userDetails.user_auth_id).first()
-
-            # If user has an image, generate the image URL
-            if user_image and user_image.imageString:
-                image_url = request.host_url + 'uploads/' + user_image.imageString
-            else:
-                image_url = None  # No image available
-
-            user = {
-                'id': userDetails.user_auth_id,
-                'firstname': userDetails.firstname,
-                'lastname': userDetails.lastname,
-                'email': userDetails.email,
-                'gender': userDetails.gender,
-                'hobbies': userDetails.hobbies,
-                'preferences': userDetails.preferences,
-                'phone_number': userDetails.phone_number,
-                'age': userDetails.age,
-                'bio': userDetails.bio,
-                'image_url': image_url,  # Include the image URL in the response
-                'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
-            }
-            users.append(user)
-
-        return jsonify({'users': users}), 200
-
-    except Exception as e:
-        return jsonify({'error': f'Internal Server Error: {e}'}), 500
-
-
-# Getting Relationships DATA FROM DATABASE 2025
-@app.route('/relationshipData', methods=['GET'])
-def get_relationship_data():
-    relationships = RelationshipData.query.all()
-    data = [
-        {
-            'id': rel.id,
-            'user_auth_id': rel.user_auth_id,
-            'email': rel.email,
-            'lookingfor': rel.lookingfor,
-            'openfor': rel.openfor
-        }
-        for rel in relationships
-    ]
-    return jsonify(data)
-
-
-@app.route('/locationInfo', methods=['POST'])
-def postLocationInfo():
-    try:
-        data = request.get_json()
-        print("POST /locationInfo received:", data)
-
-        # ===== CATEGORY =====
-        category_name = data.get("event_category")
-        if not category_name:
-            return jsonify({"error": "event_category is required"}), 400
-
-        try:
-            category = EventCategory.query.filter_by(name=category_name).first()
-            if not category:
-                category = EventCategory(name=category_name)
-                db.session.add(category)
-                db.session.commit()
-            print("Category OK:", category.name)
-        except SQLAlchemyError as e:
-            print("Error processing category:", e)
-            traceback.print_exc()
-            db.session.rollback()
-            return jsonify({"error": "Category processing failed"}), 500
-
-        # ===== HOST =====
-        host_id = data.get("event_host_id")
-        if host_id is None:
-            return jsonify({"error": "event_host_id is required"}), 400
-
-        try:
-            host = EventHost.query.get(host_id)
-            if not host:
-                return jsonify({"error": "Invalid event_host_id"}), 400
-            print("Host OK:", host.id)
-        except SQLAlchemyError as e:
-            print("Error processing host:", e)
-            traceback.print_exc()
-            return jsonify({"error": "Host processing failed"}), 500
-
-        # ===== OTHER FIELDS =====
-        try:
-
-            lat = data.get('lat')
-            lng = data.get('lng')
-            totalPrice = data.get('totalPrice')
-            maxAttendees = data.get('maxAttendees')
-            date = data.get('date')
-            time = data.get('time')
-            location = data.get('location')
-            description = data.get('description')
-            location = data.get('location')
-
-            newLocationDetails = LocationInfo(
-                maxAttendees=maxAttendees,
-                maleAttendees=0,
-                femaleAttendees=0,
-                date=date,
-                time=time,
-                location=location,
-                lat=lat,
-                lng=lng,
-                totalPrice=totalPrice,
-                description=description,
-                event_category_id=category.id,
-                event_host_id=host.id,
-                matchmake=bool(data.get("matchmake", False))
-            )
-
-            db.session.add(newLocationDetails)
-            db.session.commit()
-            print("Location added:", newLocationDetails.id)
-
-        except (TypeError, ValueError) as e:
-            print("Invalid input type:", e)
-            traceback.print_exc()
-            db.session.rollback()
-            return jsonify({"error": "Invalid input types"}), 400
-        except SQLAlchemyError as e:
-            print("Error creating LocationInfo:", e)
-            traceback.print_exc()
-            db.session.rollback()
-            return jsonify({"error": "Failed to add location"}), 500
-
-        return jsonify({'message': "New Location added", "id": newLocationDetails.id}), 201
-
-    except Exception as e:
-        print("Unexpected error in /locationInfo:", e)
-        traceback.print_exc()
-        return jsonify({"error": "Internal server error"}), 500
-
-
-@app.route('/locationInfo', methods=['GET'])
-def getLocationInfo():
-    locationInfo = LocationInfo.query.all()
-    data = [
-        {
-            'id': userloc.id,
-            'maxAttendees': userloc.maxAttendees,
-            'maleAttendees': userloc.maleAttendees,
-            'femaleAttendees': userloc.femaleAttendees,
-            'date': userloc.date,
-            'time': userloc.time,
-            'location': userloc.location,
-            'lat': userloc.lat,
-            'lng': userloc.lng,
-            'totalPrice': userloc.totalPrice,
-            'description': userloc.description,  # NEW
-            'matchmake': userloc.matchmake,      # NEW
-            'event_category': userloc.event_category.name if userloc.event_category else None,
-            'event_category_id': userloc.event_category_id,
-            'event_host': userloc.event_host.name if hasattr(userloc, 'event_host') and userloc.event_host else None,  # NEW
-            'event_host_id': userloc.event_host_id if hasattr(userloc, 'event_host_id') else None,  # NEW
-            'current_round': userloc.current_round
-        }
-        for userloc in locationInfo
-    ]
-    return jsonify(data)
-
-
-@app.route('/my_tickets', methods=['GET'])
-def get_user_tickets():
-    user_id = request.args.get('user_id')
-
-    if not user_id:
-        return jsonify({'message': 'user_id is required'}), 400
-
-    attendances = Attendance.query.filter_by(user_id=user_id).all()
-    tickets = []
-
-    for attendance in attendances:
-        location = LocationInfo.query.get(attendance.location_id)
-        if not location:
-            continue
-
-        checked_in = has_user_checked_in(user_id, location.id)
-
-        tickets.append({
-            'location_id': location.id,
-            'event_category': location.event_category.name if location.event_category else None,
-            'event_category_id': location.event_category_id,
-            'event_host': location.event_host.name if location.event_host else None,  # NEW
-            'event_host_id': location.event_host_id,
-            'description': location.description,  # NEW
-            'matchmake': location.matchmake,      # NEW
-            'date': location.date,
-            'time': location.time,
-            'location': location.location,
-            'checked_in': checked_in,
-            'maleAttendees': location.maleAttendees or 0,
-            'femaleAttendees': location.femaleAttendees or 0,
-            'maxAttendees': location.maxAttendees or 0
-        })
-
-    return jsonify({'tickets': tickets}), 200
-
-
-# ✅ Route: Perform check-in
-@app.route('/checkin', methods=['POST'])
-def checkin():
-    data = request.get_json()
-    user_id = data.get('user_id')
-    location_id = data.get('location_id')
-
-    if not user_id or not location_id:
-        return jsonify({'message': 'user_id and location_id are required'}), 400
-
-    # Validate location
-    user = Task.query.get(user_id)
-    location = LocationInfo.query.get(location_id)
-    if not user or not location:
-        return jsonify({'message': 'Invalid location or Id'}), 404
-
-    # User must have marked attendance first
-    attendance = Attendance.query.filter_by(user_id=user_id, location_id=location_id).first()
-    if not attendance:
-        return jsonify({'message': 'User must attend before check-in'}), 403
-
-    # Check if already checked in
-    existing_checkin = CheckIn.query.filter_by(user_id=user_id, location_id=location_id).first()
-    if existing_checkin:
-        return jsonify({'message': 'User already checked in'}), 400
-
-    # Validate if check-in already closed for this location # Work: 41410282
-    if location.checkin_closed:  # Work: 41410282
-        return jsonify({'message': 'Check-in is closed for this event'}), 400  # Work: 41410282
-
-    # Slot Limit Enforcement
-    checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
-    if checkin_count >= location.maxAttendees and not location.checkin_closed:  # Checks for the limit and if checkin is not closed to avoid duplicate matches
-        location.checkin_closed = True  # Work: 41410282
-        db.session.commit()  # Work: 41410282
-        trigger_matchmaking_for_location(location_id)  # Work: 41410282
-        return jsonify({'message': f'All {location.maxAttendees} slots are filled'}), 400
-
-    # Time-Based Restrictions (10 minutes after event time)
-    try:
-        event_time = datetime.strptime(f"{location.date} {location.time}", "%Y-%m-%d %H:%M")
-        current_time = datetime.now()
-        time_diff = (current_time - event_time).total_seconds()
-
-        if time_diff > 600:
-            location.checkin_closed = True  # Work: 41410282
-            db.session.commit()  # Work: 41410282
-            # Trigger matchmaking when time expires (even if slots aren't full)
-            trigger_matchmaking_for_location(location_id)
-            return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
-    except Exception as e:
-        print(f"Error parsing event time: {str(e)}")
-
-    # Create check-in
-    new_checkin = CheckIn(user_id=user_id, location_id=location_id)
-    db.session.add(new_checkin)
-    db.session.commit()
-
-    # Check if this check-in completes the slots or triggers end phase
-    updated_checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
-    if updated_checkin_count >= location.maxAttendees:
-        location.checkin_closed = True  # Work: 41410282
-        db.session.commit()  # Work: 41410282
-        # All slots filled - trigger automatic matchmaking
-        trigger_matchmaking_for_location(location_id)
-
-    return jsonify({
-        'message': 'Check-in successful',
-        'user_id': user_id,
-        'location_id': location_id,
-        'timestamp': new_checkin.timestamp.isoformat(),
-        'checkin_status': f"{updated_checkin_count}/{location.maxAttendees} checked in"
-    }), 200
-
-
-@app.route('/checkin', methods=['GET'])
-def check_checkin():
-    user_id = request.args.get('user_id')
-    location_id = request.args.get('location_id')
-
-    if not user_id or not location_id:
-        return jsonify({'message': 'Missing user_id or location_id'}), 400
-
-    checkin = CheckIn.query.filter_by(user_id=user_id, location_id=location_id).first()
-
-    if checkin:
-        location = checkin.location
-
-        # Count total check-ins at this location
-        checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
-        max_attendees = location.maxAttendees
-
-    if checkin:
-        location = checkin.location
-        return jsonify({
-            'checked_in': True,
-            'timestamp': checkin.timestamp,
-            'checkin_status': f"{checkin_count}/{max_attendees} checked in",
-            'location': {
-                'id': location.id,
-                'location': location.location,
-                'date': location.date,
-                'time': location.time,
-                'lat': location.lat,
-                'lng': location.lng,
-                'event_type': location.event_type,
-                'maxAttendees': location.maxAttendees,
-                'maleAttendees': location.maleAttendees,
-                'femaleAttendees': location.femaleAttendees,
-                'totalPrice': location.totalPrice
-            }
-        }), 200
-    else:
-        return jsonify({'checked_in': False}), 200
-
-
 def get_unix_timestamp(datatime):
     # Convert to Unix timestamp (seconds since epoch)
     unix_ts = int(datatime.timestamp())
 
     return unix_ts
-
-
-@app.route('/matches_at_location/<int:user_id>/<int:location_id>', methods=['GET'])
-def get_user_matches_for_location(user_id, location_id):
-    try:
-        create_new_matches = request.args.get('create_new_matches')
-
-        if create_new_matches and create_new_matches == 'true':
-            match_making_result = trigger_matchmaking_for_location(location_id)
-            print(f"Match making at location result: {match_making_result}")
-
-        # Query to get all existing active matches for a given user at a specific location
-        existing_matches = (
-            db.session.query(Match)
-            .join(CheckIn, or_(
-                CheckIn.user_id == Match.user1_id,
-                CheckIn.user_id == Match.user2_id
-            ))
-            .filter(
-                or_(Match.user1_id == user_id, Match.user2_id == user_id),
-                Match.status == 'active',
-                Match.location_id == location_id
-            )
-            .order_by(desc(Match.visible_after))
-            .all()
-        )
-
-        if len(existing_matches) == 0:
-            return jsonify({'message': 'No matches left for this event'}), 400
-
-        preferences = (UserPreference.query
-                       .filter(
-                            or_(UserPreference.user_id == user_id, UserPreference.preferred_user_id == user_id)
-                       ).all())
-
-        preference_pairs = set()
-        for pref in preferences:
-            preference_pairs.add((pref.user_id, pref.preferred_user_id))
-            preference_pairs.add((pref.preferred_user_id, pref.user_id)) # Add reverse pair also
-
-        # Format results with matches
-        result = []
-        for match in existing_matches:
-
-            matched_user_id = int(
-                match.user2_id if match.user1_id == user_id else match.user1_id)  # get opposite match id
-
-            # Checking if this match already has a preference available
-            if (user_id, matched_user_id) in preference_pairs:
-                print(f"SKIPPING: Existing preference found")
-                continue
-
-            # Get user image if available
-            user_image = UserImages.query.filter_by(user_auth_id=matched_user_id).first()
-            image_url = None
-            if user_image and user_image.imageString:
-                image_url = f"/uploads/{user_image.imageString}"
-
-            other_user_data = UserData.query.filter_by(user_auth_id=matched_user_id).first()
-
-            result.append({
-                'user_id': matched_user_id,
-                'email': other_user_data.email,
-                'firstname': other_user_data.firstname,
-                'lastname': other_user_data.lastname,
-                'preferences': other_user_data.preferences,
-                'age': other_user_data.age,
-                'bio': other_user_data.bio,
-                'hobbies': other_user_data.hobbies,
-                'gender': other_user_data.gender,
-                'phone_number': other_user_data.phone_number,
-                'image_url': image_url,
-                'status': match.status,
-                'location': match.location_id,
-                'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
-                'visible_after': match.visible_after
-            })
-
-        if len(result) == 0:
-            return jsonify({'message': 'No matches left for this event'}), 400
-
-        return jsonify({'matches': result})
-
-    except Exception as e:
-        print(f"Error in get_user_matches: {str(e)}")
-        return jsonify({'matches': []})
 
 
 def trigger_matchmaking_for_location(location_id):
@@ -1745,7 +639,7 @@ def trigger_matchmaking_for_location(location_id):
         female_users = []
 
         for user in checked_in_users:
-            user_data = UserData.query.filter_by(user_auth_id=user.id).first()
+            user_data = UserProfile.query.filter_by(user_auth_id=user.id).first()
             if user_data and user_data.gender:
                 gender = user_data.gender.lower()
                 if gender in ['men', 'man', 'male']:
@@ -1889,6 +783,741 @@ def trigger_matchmaking_for_location(location_id):
         return None
 
 
+# USER SIGNIN METHOD -> Start
+
+@app.route('/sign-in', methods=['POST'])
+def sign_in():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
+
+        user = Task.query.filter_by(email=email).first()
+
+        if user:
+            if password == user.password:
+                return jsonify({
+                    'message': 'Sign in successful',
+                    'user_auth_id': user.id  # <-- include Task ID
+                }), 200
+            else:
+                return jsonify({'message': 'Invalid credentials'}), 401
+        else:
+            return jsonify({'message': 'Invalid credentials'}), 401
+
+    except Exception as e:
+        print("Sign-in error:", e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+
+@app.route('/sign-in', methods=['GET'])
+def get_signin_data():
+    signin = Task.query.all()
+    data = [
+        {
+            'id': rel.id,
+            'email': rel.email,
+            'password': rel.password,
+        }
+        for rel in signin
+    ]
+    return jsonify(data)
+
+# USER SIGNIN METHOD -> End
+
+# METHOD TO GET AUTHENTICATED USERS LIST -> Start
+
+@app.get("/users")
+def home():
+    tasks = Task.query.all()
+    task_list = [
+        {'id': task.id, 'email': task.email, 'password': task.password} for task in tasks
+    ]
+    return jsonify({"user_details": task_list})
+
+
+# POST USER CREDENTIALS TO DATABASE
+@app.route('/users', methods=['POST'])
+def postData():
+    try:
+        data = request.get_json()
+        new_email = data.get('email')
+        new_password = data.get('password')
+
+        if not new_email or not new_password:
+            return jsonify({'error': 'Email and password are required'}), 400
+
+        # Validate email format
+        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not re.match(email_regex, new_email):
+            return jsonify({'message': 'Invalid email format'}), 400
+
+        # Check if email already exists
+        existing_user = Task.query.filter_by(email=new_email).first()
+        if existing_user:
+            return jsonify({'message': 'Email already exists'}), 400
+
+        # Create new user in Task table
+        new_user = Task(email=new_email, password=new_password)
+        db.session.add(new_user)
+        db.session.commit()
+
+        # Return the id of the created user (to use as user_auth_id later)
+        return jsonify({
+            'message': 'User added successfully',
+            'user_auth_id': new_user.id
+        }), 201
+
+    except IntegrityError as ie:
+        # Rollback in case of unique constraint violations
+        db.session.rollback()
+        return jsonify({'message': 'Email already exists'}), 400
+
+    except Exception as e:
+        db.session.rollback()
+        print("Signup error:", e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+# METHOD TO GET AUTHENTICATED USERS LIST -> End
+
+# USERPROFILE -> Start
+
+@app.route('/userProfile', methods=['POST'])
+def postUserProfileData():
+    try:
+        data = request.get_json()
+
+        user_id = data['user_id']
+        user = Task.query.get(user_id)
+
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
+
+        if profile:
+            message = "Updated user profile"
+        else:
+            profile = UserProfile(user_auth_id=user.id)
+            db.session.add(profile)
+            message = "Created user profile"
+
+        # Update fields
+        profile.firstname = data.get('firstname')
+        profile.lastname = data.get('lastname')
+        profile.gender = data.get('gender')
+        profile.email = user.email  # keep in sync
+        profile.phone_number = data.get('phone_number')
+        profile.age = data.get('age')
+        profile.sect = data.get('sect')
+        profile.lookingfor = data.get('lookingfor')
+        
+        # Preferences (separate table)
+        if profile.preferences:
+            prefs = profile.preferences
+        else:
+            prefs = UserPreferences(profile=profile)
+            db.session.add(prefs)
+
+        prefs.hobbies = data.get('hobbies')
+        prefs.preferences = data.get('preferences')
+        prefs.bio = data.get('bio')
+
+        db.session.commit()
+        return jsonify({'message': message}), 200
+
+    except Exception as e:
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+
+@app.route('/userProfile', methods=['GET'])
+def getUserProfileData():
+    try:
+        profiles = UserProfile.query.all()
+        users = []
+
+        for profile in profiles:
+            # Access the UserImages via Task relationship
+            task_user = profile.user  # Task object
+            user_images = getattr(task_user, 'user_image', [])  # list of UserImages
+            user_image = user_images[0] if user_images else None
+
+            # Construct image URL if available
+            if user_image and getattr(user_image, 'imageString', None):
+                image_url = request.host_url.rstrip('/') + '/uploads/' + user_image.imageString
+            else:
+                image_url = None
+
+            user_data = {
+                'id': profile.user_auth_id,
+                'firstname': profile.firstname,
+                'lastname': profile.lastname,
+                'gender': profile.gender,
+                'email': profile.email,
+                'phone_number': profile.phone_number,
+                'age': profile.age,
+                'sect': profile.sect,
+                'lookingfor': profile.lookingfor,            
+                'image_url': image_url,
+                'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
+            }
+            users.append(user_data)
+
+        return jsonify({'users': users}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Internal Server Error: {e}'}), 500
+
+# USERPROFILE -> End
+
+# USERPREFERENCES -> Start
+
+@app.route('/userPreferences', methods=['POST'])
+def postUserPreferences():
+    try:
+        data = request.get_json()
+        user_profile_id = data['user_profile_id']
+
+        # Find the corresponding profile
+        profile = UserProfile.query.get(user_profile_id)
+        if not profile:
+            return jsonify({'error': 'UserProfile not found'}), 404
+
+        # Check if preferences already exist
+        prefs = profile.preferences
+        if prefs:
+            message = "Updated user preferences"
+        else:
+            prefs = UserPreferences(profile=profile)
+            db.session.add(prefs)
+            message = "Created user preferences"
+
+        # Update fields
+        prefs.hobbies = data.get('hobbies', [])
+        prefs.preferences = data.get('preferences', [])
+        prefs.bio = data.get('bio')
+        prefs.alcoholstatus = data.get('alcoholstatus')
+        prefs.childrenstatus = data.get('childrenstatus')
+        prefs.maritalstatus = data.get('maritalstatus')
+        prefs.smokestatus = data.get('smokestatus')
+        prefs.halalfood = data.get('halalfood')
+
+        db.session.commit()
+        return jsonify({'message': message}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Internal Server Error: {e}'}), 500
+
+# get ALL users preferences
+@app.route('/userPreferences', methods=['GET'])
+def getUserPreferences():
+    try:
+        all_prefs = UserPreferences.query.all()
+        result = []
+
+        for prefs in all_prefs:
+            profile = prefs.profile
+            user_data = {
+                'user_profile_id': profile.id,
+                'firstname': profile.firstname,
+                'lastname': profile.lastname,
+                'hobbies': prefs.hobbies,
+                'preferences': prefs.preferences,
+                'bio': prefs.bio,
+                'alcoholstatus': prefs.alcoholstatus,
+                'childrenstatus': prefs.childrenstatus,
+                'maritalstatus': prefs.maritalstatus,
+                'smokestatus': prefs.smokestatus,
+                'halalfood': prefs.halalfood
+            }
+            result.append(user_data)
+
+        return jsonify({'user_preferences': result}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Internal Server Error: {e}'}), 500
+
+# get SINGLE users preferences
+
+@app.route('/userPreferences/<int:user_profile_id>', methods=['GET'])
+def getUserPreferencesById(user_profile_id):
+    try:
+        prefs = UserPreferences.query.filter_by(user_profile_id=user_profile_id).first()
+        if not prefs:
+            return jsonify({'error': 'UserPreferences not found'}), 404
+
+        profile = prefs.profile
+        user_data = {
+            'user_profile_id': profile.id,
+            'firstname': profile.firstname,
+            'lastname': profile.lastname,
+            'hobbies': prefs.hobbies,
+            'preferences': prefs.preferences,
+            'bio': prefs.bio,
+            'alcoholstatus': prefs.alcoholstatus,
+            'childrenstatus': prefs.childrenstatus,
+            'maritalstatus': prefs.maritalstatus,
+            'smokestatus': prefs.smokestatus,
+            'halalfood': prefs.halalfood
+        }
+        return jsonify({'user_preferences': user_data}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Internal Server Error: {e}'}), 500
+
+# USERPREFERENCES -> End
+
+# USERCHARACTER -> Start
+
+@app.route('/userCharacter', methods=['POST'])
+def postUserCharacter():
+    try:
+        data = request.get_json()
+        user_profile_id = data['user_profile_id']
+
+        # Find the corresponding profile
+        profile = UserProfile.query.get(user_profile_id)
+        if not profile:
+            return jsonify({'error': 'UserProfile not found'}), 404
+
+        # Check if character already exists
+        character = profile.character
+        if character:
+            message = "Updated user character"
+        else:
+            character = UserCharacter(profile=profile)
+            db.session.add(character)
+            message = "Created user character"
+
+        # Update fields
+        character.muslimstatus = data.get('muslimstatus')
+        character.practicing = data.get('practicing')
+        character.nationality = data.get('nationality')
+        character.personality_type = data.get('personality_type')
+
+        db.session.commit()
+        return jsonify({'message': message}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Internal Server Error: {e}'}), 500
+
+# get ALL users character
+@app.route('/userCharacter', methods=['GET'])
+def getUserCharacter():
+    try:
+        all_chars = UserCharacter.query.all()
+        result = []
+
+        for char in all_chars:
+            profile = char.profile
+            char_data = {
+                'user_profile_id': profile.id,
+                'firstname': profile.firstname,
+                'lastname': profile.lastname,
+                'muslimstatus': char.muslimstatus,
+                'practicing': char.practicing,
+                'nationality': char.nationality,
+                'personality_type': char.personality_type
+            }
+            result.append(char_data)
+
+        return jsonify({'user_characters': result}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Internal Server Error: {e}'}), 500
+    
+# get SINGLE users character
+@app.route('/userCharacter/<int:user_profile_id>', methods=['GET'])
+def getUserCharacterById(user_profile_id):
+    try:
+        character = UserCharacter.query.filter_by(user_profile_id=user_profile_id).first()
+        if not character:
+            return jsonify({'error': 'UserCharacter not found'}), 404
+
+        profile = character.profile
+        char_data = {
+            'user_profile_id': profile.id,
+            'firstname': profile.firstname,
+            'lastname': profile.lastname,
+            'muslimstatus': character.muslimstatus,
+            'practicing': character.practicing,
+            'nationality': character.nationality,
+            'personality_type': character.personality_type
+        }
+
+        return jsonify({'user_character': char_data}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Internal Server Error: {e}'}), 500
+
+
+# USERCHARACTER -> End
+
+# IMAGE UPLOAD AND RETRIEVAL -> Start
+
+@app.route('/upload_image', methods=['POST'])
+def upload_image():
+    try:
+        # Check if the request contains a file
+        if 'image' not in request.files:
+            return jsonify({"error": "No image file provided"}), 400
+
+        file = request.files['image']
+        new_email = request.form.get('email')
+
+        # Check if email is provided
+        if not new_email:
+            return jsonify({"error": "Email is required"}), 400
+
+        user = Task.query.filter_by(email=new_email).first()
+
+        if not user:
+            return jsonify({'error': "No user registered with this email"}), 400
+
+        user_auth_id = user.id
+
+        # Check if the file is allowed
+        if file and allowed_file(file.filename):
+            filename = secure_filename(file.filename)
+
+            # Save the file in the 'uploads' folder
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+
+            # Check if an image already exists for this user
+            user_image = UserImages.query.filter_by(user_auth_id=user_auth_id).first()
+
+            if user_image:
+                # Update existing image
+                user_image.imageString = filename
+                message = "Updated user image"
+            else:
+                # Add new image
+                user_image = UserImages(
+                    user_auth_id=user_auth_id,
+                    email=new_email,
+                    imageString=filename
+                )
+                db.session.add(user_image)
+                message = "Added new user image"
+
+            db.session.commit()
+
+            # Generate the image URL
+            image_url = request.host_url + 'uploads/' + filename
+            return jsonify({"message": message, "image_url": image_url}), 201
+
+        else:
+            return jsonify({"error": "Invalid image format"}), 400
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/get_image/<int:user_auth_id>', methods=['GET'])
+def get_image(user_auth_id):
+    # Query the database for a single record matching the user_auth_id
+    user_image = UserImages.query.filter_by(user_auth_id=user_auth_id).first()
+
+    if user_image:
+        # Return the image as an object
+        return jsonify({
+            "id": user_image.id,
+            "email": user_image.email,
+            "user_auth_id": user_image.user_auth_id,
+            "imageString": user_image.imageString
+        }), 200
+    else:
+        return jsonify({"error": "No image found for the given user_auth_id"}), 404
+    
+# IMAGE UPLOAD AND RETRIEVAL -> End
+
+# LOCATIONINFO -> Start
+
+@app.route('/locationInfo', methods=['POST'])
+def postLocationInfo():
+    try:
+        data = request.get_json()
+        print("POST /locationInfo received:", data)
+
+        # ===== CATEGORY =====
+        category_name = data.get("event_category")
+        if not category_name:
+            return jsonify({"error": "event_category is required"}), 400
+
+        try:
+            category = EventCategory.query.filter_by(name=category_name).first()
+            if not category:
+                category = EventCategory(name=category_name)
+                db.session.add(category)
+                db.session.commit()
+            print("Category OK:", category.name)
+        except SQLAlchemyError as e:
+            print("Error processing category:", e)
+            traceback.print_exc()
+            db.session.rollback()
+            return jsonify({"error": "Category processing failed"}), 500
+
+        # ===== HOST =====
+        host_id = data.get("event_host_id")
+        if host_id is None:
+            return jsonify({"error": "event_host_id is required"}), 400
+
+        try:
+            host = EventHost.query.get(host_id)
+            if not host:
+                return jsonify({"error": "Invalid event_host_id"}), 400
+            print("Host OK:", host.id)
+        except SQLAlchemyError as e:
+            print("Error processing host:", e)
+            traceback.print_exc()
+            return jsonify({"error": "Host processing failed"}), 500
+
+        # ===== OTHER FIELDS =====
+        try:
+
+            lat = data.get('lat')
+            lng = data.get('lng')
+            totalPrice = data.get('totalPrice')
+            maxAttendees = data.get('maxAttendees')
+            date = data.get('date')
+            time = data.get('time')
+            location = data.get('location')
+            description = data.get('description')
+            location = data.get('location')
+
+            newLocationDetails = LocationInfo(
+                maxAttendees=maxAttendees,
+                maleAttendees=0,
+                femaleAttendees=0,
+                date=date,
+                time=time,
+                location=location,
+                lat=lat,
+                lng=lng,
+                totalPrice=totalPrice,
+                description=description,
+                event_category_id=category.id,
+                event_host_id=host.id,
+                matchmake=bool(data.get("matchmake", False))
+            )
+
+            db.session.add(newLocationDetails)
+            db.session.commit()
+            print("Location added:", newLocationDetails.id)
+
+        except (TypeError, ValueError) as e:
+            print("Invalid input type:", e)
+            traceback.print_exc()
+            db.session.rollback()
+            return jsonify({"error": "Invalid input types"}), 400
+        except SQLAlchemyError as e:
+            print("Error creating LocationInfo:", e)
+            traceback.print_exc()
+            db.session.rollback()
+            return jsonify({"error": "Failed to add location"}), 500
+
+        return jsonify({'message': "New Location added", "id": newLocationDetails.id}), 201
+
+    except Exception as e:
+        print("Unexpected error in /locationInfo:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@app.route('/locationInfo', methods=['GET'])
+def getLocationInfo():
+    locationInfo = LocationInfo.query.all()
+    data = [
+        {
+            'id': userloc.id,
+            'maxAttendees': userloc.maxAttendees,
+            'maleAttendees': userloc.maleAttendees,
+            'femaleAttendees': userloc.femaleAttendees,
+            'date': userloc.date,
+            'time': userloc.time,
+            'location': userloc.location,
+            'lat': userloc.lat,
+            'lng': userloc.lng,
+            'totalPrice': userloc.totalPrice,
+            'description': userloc.description,  # NEW
+            'matchmake': userloc.matchmake,      # NEW
+            'event_category': userloc.event_category.name if userloc.event_category else None,
+            'event_category_id': userloc.event_category_id,
+            'event_host': userloc.event_host.name if hasattr(userloc, 'event_host') and userloc.event_host else None,  # NEW
+            'event_host_id': userloc.event_host_id if hasattr(userloc, 'event_host_id') else None,  # NEW
+            'current_round': userloc.current_round
+        }
+        for userloc in locationInfo
+    ]
+    return jsonify(data)
+
+# LOCATIONINFO -> End
+
+# TICKETS -> Start
+
+@app.route('/my_tickets', methods=['GET'])
+def get_user_tickets():
+    user_id = request.args.get('user_id')
+
+    if not user_id:
+        return jsonify({'message': 'user_id is required'}), 400
+
+    attendances = Attendance.query.filter_by(user_id=user_id).all()
+    tickets = []
+
+    for attendance in attendances:
+        location = LocationInfo.query.get(attendance.location_id)
+        if not location:
+            continue
+
+        checked_in = has_user_checked_in(user_id, location.id)
+
+        tickets.append({
+            'location_id': location.id,
+            'event_category': location.event_category.name if location.event_category else None,
+            'event_category_id': location.event_category_id,
+            'event_host': location.event_host.name if location.event_host else None,  # NEW
+            'event_host_id': location.event_host_id,
+            'description': location.description,  # NEW
+            'matchmake': location.matchmake,      # NEW
+            'date': location.date,
+            'time': location.time,
+            'location': location.location,
+            'checked_in': checked_in,
+            'maleAttendees': location.maleAttendees or 0,
+            'femaleAttendees': location.femaleAttendees or 0,
+            'maxAttendees': location.maxAttendees or 0
+        })
+
+    return jsonify({'tickets': tickets}), 200
+
+# TICKETS -> End
+
+# CHECK-IN AND ATTENDANCE -> Start
+
+# ✅ Route: Perform check-in
+@app.route('/checkin', methods=['POST'])
+def checkin():
+    data = request.get_json()
+    user_id = data.get('user_id')
+    location_id = data.get('location_id')
+
+    if not user_id or not location_id:
+        return jsonify({'message': 'user_id and location_id are required'}), 400
+
+    # Validate location
+    user = Task.query.get(user_id)
+    location = LocationInfo.query.get(location_id)
+    if not user or not location:
+        return jsonify({'message': 'Invalid location or Id'}), 404
+
+    # User must have marked attendance first
+    attendance = Attendance.query.filter_by(user_id=user_id, location_id=location_id).first()
+    if not attendance:
+        return jsonify({'message': 'User must attend before check-in'}), 403
+
+    # Check if already checked in
+    existing_checkin = CheckIn.query.filter_by(user_id=user_id, location_id=location_id).first()
+    if existing_checkin:
+        return jsonify({'message': 'User already checked in'}), 400
+
+    # Validate if check-in already closed for this location # Work: 41410282
+    if location.checkin_closed:  # Work: 41410282
+        return jsonify({'message': 'Check-in is closed for this event'}), 400  # Work: 41410282
+
+    # Slot Limit Enforcement
+    checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
+    if checkin_count >= location.maxAttendees and not location.checkin_closed:  # Checks for the limit and if checkin is not closed to avoid duplicate matches
+        location.checkin_closed = True  # Work: 41410282
+        db.session.commit()  # Work: 41410282
+        trigger_matchmaking_for_location(location_id)  # Work: 41410282
+        return jsonify({'message': f'All {location.maxAttendees} slots are filled'}), 400
+
+    # Time-Based Restrictions (10 minutes after event time)
+    try:
+        event_time = datetime.strptime(f"{location.date} {location.time}", "%Y-%m-%d %H:%M")
+        current_time = datetime.now()
+        time_diff = (current_time - event_time).total_seconds()
+
+        if time_diff > 600:
+            location.checkin_closed = True  # Work: 41410282
+            db.session.commit()  # Work: 41410282
+            # Trigger matchmaking when time expires (even if slots aren't full)
+            trigger_matchmaking_for_location(location_id)
+            return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
+    except Exception as e:
+        print(f"Error parsing event time: {str(e)}")
+
+    # Create check-in
+    new_checkin = CheckIn(user_id=user_id, location_id=location_id)
+    db.session.add(new_checkin)
+    db.session.commit()
+
+    # Check if this check-in completes the slots or triggers end phase
+    updated_checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
+    if updated_checkin_count >= location.maxAttendees:
+        location.checkin_closed = True  # Work: 41410282
+        db.session.commit()  # Work: 41410282
+        # All slots filled - trigger automatic matchmaking
+        trigger_matchmaking_for_location(location_id)
+
+    return jsonify({
+        'message': 'Check-in successful',
+        'user_id': user_id,
+        'location_id': location_id,
+        'timestamp': new_checkin.timestamp.isoformat(),
+        'checkin_status': f"{updated_checkin_count}/{location.maxAttendees} checked in"
+    }), 200
+
+
+@app.route('/checkin', methods=['GET'])
+def check_checkin():
+    user_id = request.args.get('user_id')
+    location_id = request.args.get('location_id')
+
+    if not user_id or not location_id:
+        return jsonify({'message': 'Missing user_id or location_id'}), 400
+
+    checkin = CheckIn.query.filter_by(user_id=user_id, location_id=location_id).first()
+
+    if checkin:
+        location = checkin.location
+
+        # Count total check-ins at this location
+        checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
+        max_attendees = location.maxAttendees
+
+    if checkin:
+        location = checkin.location
+        return jsonify({
+            'checked_in': True,
+            'timestamp': checkin.timestamp,
+            'checkin_status': f"{checkin_count}/{max_attendees} checked in",
+            'location': {
+                'id': location.id,
+                'location': location.location,
+                'date': location.date,
+                'time': location.time,
+                'lat': location.lat,
+                'lng': location.lng,
+                'event_type': location.event_type,
+                'maxAttendees': location.maxAttendees,
+                'maleAttendees': location.maleAttendees,
+                'femaleAttendees': location.femaleAttendees,
+                'totalPrice': location.totalPrice
+            }
+        }), 200
+    else:
+        return jsonify({'checked_in': False}), 200
+
+
 @app.route('/attend', methods=['POST'])
 def attend_location():
     data = request.get_json()
@@ -1900,7 +1529,7 @@ def attend_location():
 
     user = Task.query.get(user_id)
     location = LocationInfo.query.get(location_id)
-    profile = UserData.query.filter_by(user_auth_id=user_id).first()
+    profile = UserProfile.query.filter_by(user_auth_id=user_id).first()
 
     if not user or not location:
         return jsonify({'message': 'Invalid user or location'}), 404
@@ -1973,51 +1602,353 @@ def get_user_attendance_for_location(user_id, location_id):
     record = Attendance.query.filter_by(user_id=user_id, location_id=location_id).first()
     return jsonify({'hasAttended': record.hasAttended if record else False})
 
+# CHECK-IN AND ATTENDANCE -> End
 
-# USER SIGNIN METHOD
-@app.route('/sign-in', methods=['POST'])
-def sign_in():
+# MATCHES FOR LOCATION -> Start
+
+@app.route('/matches_at_location/<int:user_id>/<int:location_id>', methods=['GET'])
+def get_user_matches_for_location(user_id, location_id):
     try:
-        data = request.get_json()
-        email = data.get('email')
-        password = data.get('password')
+        create_new_matches = request.args.get('create_new_matches')
 
-        if not email or not password:
-            return jsonify({'error': 'Email and password are required'}), 400
+        if create_new_matches and create_new_matches == 'true':
+            match_making_result = trigger_matchmaking_for_location(location_id)
+            print(f"Match making at location result: {match_making_result}")
 
-        user = Task.query.filter_by(email=email).first()
+        # Query to get all existing active matches for a given user at a specific location
+        existing_matches = (
+            db.session.query(Match)
+            .join(CheckIn, or_(
+                CheckIn.user_id == Match.user1_id,
+                CheckIn.user_id == Match.user2_id
+            ))
+            .filter(
+                or_(Match.user1_id == user_id, Match.user2_id == user_id),
+                Match.status == 'active',
+                Match.location_id == location_id
+            )
+            .order_by(desc(Match.visible_after))
+            .all()
+        )
 
-        if user:
-            if password == user.password:
-                return jsonify({
-                    'message': 'Sign in successful',
-                    'user_auth_id': user.id  # <-- include Task ID
-                }), 200
-            else:
-                return jsonify({'message': 'Invalid credentials'}), 401
-        else:
-            return jsonify({'message': 'Invalid credentials'}), 401
+        if len(existing_matches) == 0:
+            return jsonify({'message': 'No matches left for this event'}), 400
+
+        preferences = (UserPreference.query
+                       .filter(
+                            or_(UserPreference.user_id == user_id, UserPreference.preferred_user_id == user_id)
+                       ).all())
+
+        preference_pairs = set()
+        for pref in preferences:
+            preference_pairs.add((pref.user_id, pref.preferred_user_id))
+            preference_pairs.add((pref.preferred_user_id, pref.user_id)) # Add reverse pair also
+
+        # Format results with matches
+        result = []
+        for match in existing_matches:
+
+            matched_user_id = int(
+                match.user2_id if match.user1_id == user_id else match.user1_id)  # get opposite match id
+
+            # Checking if this match already has a preference available
+            if (user_id, matched_user_id) in preference_pairs:
+                print(f"SKIPPING: Existing preference found")
+                continue
+
+            # Get user image if available
+            user_image = UserImages.query.filter_by(user_auth_id=matched_user_id).first()
+            image_url = None
+            if user_image and user_image.imageString:
+                image_url = f"/uploads/{user_image.imageString}"
+
+            other_user_data = UserProfile.query.filter_by(user_auth_id=matched_user_id).first()
+
+            result.append({
+                'user_id': matched_user_id,
+                'email': other_user_data.email,
+                'firstname': other_user_data.firstname,
+                'lastname': other_user_data.lastname,
+                'preferences': other_user_data.preferences,
+                'age': other_user_data.age,
+                'bio': other_user_data.bio,
+                'hobbies': other_user_data.hobbies,
+                'gender': other_user_data.gender,
+                'phone_number': other_user_data.phone_number,
+                'image_url': image_url,
+                'status': match.status,
+                'location': match.location_id,
+                'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
+                'visible_after': match.visible_after
+            })
+
+        if len(result) == 0:
+            return jsonify({'message': 'No matches left for this event'}), 400
+
+        return jsonify({'matches': result})
 
     except Exception as e:
-        print("Sign-in error:", e)
+        print(f"Error in get_user_matches: {str(e)}")
+        return jsonify({'matches': []})
+
+# MATCHES FOR LOCATION -> End
+
+# PREFERENCE HANDLING -> Start
+
+@app.route('/preference', methods=['POST'])
+def set_preference():
+    try:
+        data = request.get_json()
+        user_email = data.get('user_email')
+        preferred_user_email = data.get('preferred_user_email')
+        preference = data.get('preference')  # 'like', 'reject', 'save_later'
+
+        # Validate inputs
+        if not user_email or not preferred_user_email or not preference:
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        if preference not in ['like', 'reject', 'save_later']:
+            return jsonify({'error': 'Invalid preference type'}), 400
+
+        # Get user IDs from emails
+        user = Task.query.filter_by(email=user_email).first()
+        preferred_user = Task.query.filter_by(email=preferred_user_email).first()
+
+        if not user or not preferred_user:
+            return jsonify({'error': 'One or both users not found'}), 404
+
+        # Check if preference already exists
+        existing_preference = UserPreference.query.filter_by(
+            user_id=user.id,
+            preferred_user_id=preferred_user.id
+        ).first()
+
+        if existing_preference:
+            # Update existing preference
+            existing_preference.preference = preference
+            existing_preference.timestamp = datetime.now(timezone.utc)
+        else:
+            # Create new preference
+            new_preference = UserPreference(
+                user_id=user.id,
+                preferred_user_id=preferred_user.id,
+                preference=preference
+            )
+            db.session.add(new_preference)
+
+        if preference == 'reject':
+            user1_id = user.id
+            user2_id = preferred_user.id
+
+            # Check if there's an existing match
+            existing_match = Match.query.filter(
+                or_(
+                    and_(Match.user1_id == user1_id, Match.user2_id == user2_id),
+                    and_(Match.user1_id == user2_id, Match.user2_id == user1_id)
+                )
+            ).first()
+
+            # Case II: One or both users rejected
+            if existing_match:
+                # Mark match as deleted
+                existing_match.status = 'deleted'
+
+        # Check if this creates a match
+        process_potential_match(user.id, preferred_user.id)
+
+        db.session.commit()
+
+        return jsonify({'message': f'Preference set to {preference}'}), 201
+
+    except Exception as e:
+        print(f"Error in set_preference: {str(e)}")
         return jsonify({'error': 'Internal Server Error'}), 500
 
 
+@app.route('/matches/<email>', methods=['GET'])
+def get_user_matches(email):
+    try:
+        user = Task.query.filter_by(email=email).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
 
-# Getting Sign-in DATA
-@app.route('/sign-in', methods=['GET'])
-def get_signin_data():
-    signin = Task.query.all()
-    data = [
-        {
-            'id': rel.id,
-            'email': rel.email,
-            'password': rel.password,
-        }
-        for rel in signin
-    ]
-    return jsonify(data)
+        # Get all matches for this user that are visible now
+        current_time = datetime.now(timezone.utc)
+        matches = Match.query.filter(
+            or_(
+                Match.user1_id == user.id,
+                Match.user2_id == user.id
+            ),
+            Match.status != 'deleted',
+            Match.visible_after <= get_unix_timestamp(current_time)
+        ).all()
 
+        # Format the response
+        result = []
+        for match in matches:
+            # Determine the other user ID
+            other_user_id = match.user2_id if match.user1_id == user.id else match.user1_id
+            other_user = Task.query.get(other_user_id)
+            other_user_data = UserProfile.query.filter_by(user_auth_id=other_user_id).first()
+
+            if not other_user or not other_user_data:
+                continue
+
+            # Get user preferences
+            user_pref = UserPreference.query.filter_by(
+                user_id=user.id, preferred_user_id=other_user_id
+            ).first()
+
+            other_pref = UserPreference.query.filter_by(
+                user_id=other_user_id, preferred_user_id=user.id
+            ).first()
+
+            # Determine match status from user's perspective
+            if match.status == 'active':
+                # Both liked each other
+                display_status = 'matched'
+                show_message_button = True
+            else:  # status is 'pending'
+                if user_pref and user_pref.preference == 'save_later':
+                    display_status = 'decide'  # User needs to decide
+                    show_message_button = False
+                elif other_pref and other_pref.preference == 'save_later':
+                    display_status = 'pending'  # Waiting for other user
+                    show_message_button = False
+                else:
+                    display_status = 'pending'  # Generic pending
+                    show_message_button = False
+
+            # Get profile image
+            user_image = UserImages.query.filter_by(user_auth_id=other_user_id).first()
+            image_url = None
+            if user_image and user_image.imageString:
+                image_url = request.host_url + 'uploads/' + user_image.imageString
+
+            # Add match to result
+            result.append({
+                'match_id': match.id,
+                'user_id': other_user_id,
+                'firstname': other_user_data.firstname,
+                'email': other_user.email,
+                'age': other_user_data.age,
+                'bio': other_user_data.bio,
+                'status': display_status,
+                'show_message_button': show_message_button,
+                'match_date': match.match_date,
+                'image_url': image_url
+            })
+
+        return jsonify({'matches': result}), 200
+
+    except Exception as e:
+        print(f"Error in get_user_matches: {str(e)}")
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+
+# Only for users that are saved for later and waiting a decision (accept or reject) inside Matches screen on frontend -> Post their decision
+@app.route('/update_match_status', methods=['POST'])
+def update_match_status():
+    try:
+        data = request.get_json()
+        match_id = data.get('match_id')
+        user_email = data.get('user_email')
+        decision = data.get('decision')  # 'accept' or 'reject'
+
+        # Validate inputs
+        if not match_id or not user_email or not decision:
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        if decision not in ['accept', 'reject']:
+            return jsonify({'error': 'Invalid decision'}), 400
+
+        # Get user
+        user = Task.query.filter_by(email=user_email).first()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        # Get match
+        match = Match.query.get(match_id)
+        if not match:
+            return jsonify({'error': 'Match not found'}), 404
+
+        # Verify user is part of this match
+        if match.user1_id != user.id and match.user2_id != user.id:
+            return jsonify({'error': 'User not authorized to update this match'}), 403
+
+        # Determine other user ID
+        other_user_id = match.user2_id if match.user1_id == user.id else match.user1_id
+
+        # Update user preference based on decision
+        if decision == 'accept':
+            pref = UserPreference.query.filter_by(
+                user_id=user.id, preferred_user_id=other_user_id
+            ).first()
+
+            if pref:
+                pref.preference = 'like'
+            else:
+                new_pref = UserPreference(
+                    user_id=user.id,
+                    preferred_user_id=other_user_id,
+                    preference='like'
+                )
+                db.session.add(new_pref)
+
+            # Check if this creates a match
+            process_potential_match(user.id, other_user_id)
+
+        else:  # decision == 'reject'
+            pref = UserPreference.query.filter_by(
+                user_id=user.id, preferred_user_id=other_user_id
+            ).first()
+
+            if pref:
+                pref.preference = 'reject'
+            else:
+                new_pref = UserPreference(
+                    user_id=user.id,
+                    preferred_user_id=other_user_id,
+                    preference='reject'
+                )
+                db.session.add(new_pref)
+
+            # Mark match as deleted
+            match.status = 'deleted'
+
+        db.session.commit()
+
+        return jsonify({'message': f'Match {decision}ed successfully'}), 200
+
+    except Exception as e:
+        print(f"Error in update_match_status: {str(e)}")
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+# PREFERENCE HANDLING -> End
+
+# MATCHMAKING LOGIC UTILITIES -> Start
+
+# Given a user id returns the best 5 matches sorted
+@app.route('/match/<int:user_id>', methods=['GET'])
+def get_matches_endpoint(user_id):
+    matches = get_user_matches(user_id)
+    return jsonify({
+        'user_id': user_id,
+        'matches': matches
+    })
+
+
+# Get all users best matches
+@app.route('/matches', methods=['GET'])
+def get_all_matches():
+    matches = match_all_users()
+    return jsonify({'matches': matches})
+
+
+# MATCHMAKING LOGIC UTILITIES -> End
+
+
+# CHAT FUNCTIONALITY -> Start
 
 @app.route('/send_message', methods=['POST'])
 def send_message():
@@ -2127,6 +2058,7 @@ def get_chats():
 
     return jsonify(chat_history)
 
+# CHAT FUNCTIONALITY -> End
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
