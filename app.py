@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp1_render_example_user:H5Qw63yLCisIPStEnA3nTynjZe3wxZ2N@dpg-d55cciili9vc73cgu7a0-a.frankfurt-postgres.render.com/inshaapp1_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp2_render_example_user:YyxBMcdk0vIsMKU8i2IWEiINI41BVyLM@dpg-d55cjvemcj7s73f9e5jg-a.frankfurt-postgres.render.com/inshaapp2_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
