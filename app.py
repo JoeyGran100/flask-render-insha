@@ -37,7 +37,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-class Task(db.Model):
+class User(db.Model):
     __tablename__ = 'userdetails'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     email = db.Column(db.String(200), unique=True, nullable=False)
@@ -58,7 +58,7 @@ class UserProfile(db.Model):
     sect = db.Column(db.String(50))
     lookingfor = db.Column(db.String(50))
     
-    user = db.relationship('Task', backref=db.backref('profile', uselist=False))
+    user = db.relationship('User', backref=db.backref('profile', uselist=False))
 
 
 class UserInfo(db.Model):
@@ -98,7 +98,7 @@ class UserImages(db.Model):
     user_auth_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     email = db.Column(db.String(200))  # Ensure this column exists
     imageString = db.Column(db.String())
-    user = db.relationship('Task', backref=db.backref('user_image', lazy=True))
+    user = db.relationship('User', backref=db.backref('user_image', lazy=True))
 
 
 class Message(db.Model):
@@ -109,8 +109,8 @@ class Message(db.Model):
     message = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
-    sender = db.relationship('Task', foreign_keys=[sender_id], backref=db.backref('sent_messages', lazy=True))
-    receiver = db.relationship('Task', foreign_keys=[receiver_id], backref=db.backref('received_messages', lazy=True))
+    sender = db.relationship('User', foreign_keys=[sender_id], backref=db.backref('sent_messages', lazy=True))
+    receiver = db.relationship('User', foreign_keys=[receiver_id], backref=db.backref('received_messages', lazy=True))
 
 
 class EventHost(db.Model):
@@ -164,7 +164,7 @@ class CheckIn(db.Model):
     location_id = db.Column(db.Integer, db.ForeignKey('locationInfo.id'), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
-    user = db.relationship('Task', backref=db.backref('checkins', lazy=True))
+    user = db.relationship('User', backref=db.backref('checkins', lazy=True))
     location = db.relationship('LocationInfo', backref=db.backref('checkins', lazy=True))
 
     __table_args__ = (
@@ -180,7 +180,7 @@ class Attendance(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     hasAttended = db.Column(db.Boolean, default=False)
 
-    user = db.relationship('Task', backref=db.backref('attendances', lazy=True))
+    user = db.relationship('User', backref=db.backref('attendances', lazy=True))
     location = db.relationship('LocationInfo', backref=db.backref('attendances', lazy=True))
 
     __table_args__ = (
@@ -197,8 +197,8 @@ class UserPreference(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     # Relationships
-    user = db.relationship('Task', foreign_keys=[user_id], backref=db.backref('preferences', lazy=True))
-    preferred_user = db.relationship('Task', foreign_keys=[preferred_user_id],
+    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('preferences', lazy=True))
+    preferred_user = db.relationship('User', foreign_keys=[preferred_user_id],
                                      backref=db.backref('preferred_by', lazy=True))
 
 
@@ -213,8 +213,8 @@ class Match(db.Model):
     location_id = db.Column(db.Integer, db.ForeignKey('locationInfo.id'), nullable=True)
 
     # Relationships
-    user1 = db.relationship('Task', foreign_keys=[user1_id], backref=db.backref('matches_as_user1', lazy=True))
-    user2 = db.relationship('Task', foreign_keys=[user2_id], backref=db.backref('matches_as_user2', lazy=True))
+    user1 = db.relationship('User', foreign_keys=[user1_id], backref=db.backref('matches_as_user1', lazy=True))
+    user2 = db.relationship('User', foreign_keys=[user2_id], backref=db.backref('matches_as_user2', lazy=True))
     location = db.relationship('LocationInfo', backref=db.backref('matches_at_location', lazy=True))
 
 
@@ -605,7 +605,7 @@ def trigger_matchmaking_for_location(location_id):
         # Get the actual checked-in users
         checked_in_users = []
         for user_id in checked_in_user_ids:
-            user = Task.query.get(user_id)
+            user = User.query.get(user_id)
             if user:
                 checked_in_users.append(user)
 
@@ -795,13 +795,13 @@ def sign_in():
         if not email or not password:
             return jsonify({'error': 'Email and password are required'}), 400
 
-        user = Task.query.filter_by(email=email).first()
+        user = User.query.filter_by(email=email).first()
 
         if user:
             if password == user.password:
                 return jsonify({
                     'message': 'Sign in successful',
-                    'user_auth_id': user.id  # <-- include Task ID
+                    'user_auth_id': user.id  # <-- include User ID
                 }), 200
             else:
                 return jsonify({'message': 'Invalid credentials'}), 401
@@ -815,7 +815,7 @@ def sign_in():
 
 @app.route('/sign-in', methods=['GET'])
 def get_signin_data():
-    signin = Task.query.all()
+    signin = User.query.all()
     data = [
         {
             'id': rel.id,
@@ -832,7 +832,7 @@ def get_signin_data():
 
 @app.get("/users")
 def home():
-    tasks = Task.query.all()
+    tasks = User.query.all()
     task_list = [
         {'id': task.id, 'email': task.email, 'password': task.password} for task in tasks
     ]
@@ -856,12 +856,12 @@ def postData():
             return jsonify({'message': 'Invalid email format'}), 400
 
         # Check if email already exists
-        existing_user = Task.query.filter_by(email=new_email).first()
+        existing_user = User.query.filter_by(email=new_email).first()
         if existing_user:
             return jsonify({'message': 'Email already exists'}), 400
 
         # Create new user in Task table
-        new_user = Task(email=new_email, password=new_password)
+        new_user = User(email=new_email, password=new_password)
         db.session.add(new_user)
         db.session.commit()
 
@@ -890,7 +890,7 @@ def postUserProfileData():
     data = request.get_json()
 
     user_id = data['user_auth_id']
-    user = Task.query.get(user_id)
+    user = User.query.get(user_id)
 
     if not user:
         return jsonify({'error': 'User not found'}), 404
@@ -1153,7 +1153,7 @@ def upload_image():
         if not new_email:
             return jsonify({"error": "Email is required"}), 400
 
-        user = Task.query.filter_by(email=new_email).first()
+        user = User.query.filter_by(email=new_email).first()
 
         if not user:
             return jsonify({'error': "No user registered with this email"}), 400
@@ -1394,7 +1394,7 @@ def checkin():
         return jsonify({'message': 'user_id and location_id are required'}), 400
 
     # Validate location
-    user = Task.query.get(user_id)
+    user = User.query.get(user_id)
     location = LocationInfo.query.get(location_id)
     if not user or not location:
         return jsonify({'message': 'Invalid location or Id'}), 404
@@ -1508,7 +1508,7 @@ def attend_location():
     if not user_id or not location_id:
         return jsonify({'message': 'Missing user_id or location_id'}), 400
 
-    user = Task.query.get(user_id)
+    user = User.query.get(user_id)
     location = LocationInfo.query.get(location_id)
     profile = UserProfile.query.filter_by(user_auth_id=user_id).first()
 
@@ -1551,7 +1551,7 @@ def get_attendance():
 
     attendee_list = []
     for attendance in attendances:
-        user = Task.query.get(attendance.user_id)
+        user = User.query.get(attendance.user_id)
         profile = getattr(user, 'user_data', None)
         checked_in = CheckIn.query.filter_by(user_id=user.id, location_id=location.id).first() is not None
 
@@ -1692,8 +1692,8 @@ def set_preference():
             return jsonify({'error': 'Invalid preference type'}), 400
 
         # Get user IDs from emails
-        user = Task.query.filter_by(email=user_email).first()
-        preferred_user = Task.query.filter_by(email=preferred_user_email).first()
+        user = User.query.filter_by(email=user_email).first()
+        preferred_user = User.query.filter_by(email=preferred_user_email).first()
 
         if not user or not preferred_user:
             return jsonify({'error': 'One or both users not found'}), 404
@@ -1749,7 +1749,7 @@ def set_preference():
 @app.route('/matches/<email>', methods=['GET'])
 def get_user_matches(email):
     try:
-        user = Task.query.filter_by(email=email).first()
+        user = User.query.filter_by(email=email).first()
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
@@ -1769,7 +1769,7 @@ def get_user_matches(email):
         for match in matches:
             # Determine the other user ID
             other_user_id = match.user2_id if match.user1_id == user.id else match.user1_id
-            other_user = Task.query.get(other_user_id)
+            other_user = User.query.get(other_user_id)
             other_user_data = UserProfile.query.filter_by(user_auth_id=other_user_id).first()
 
             if not other_user or not other_user_data:
@@ -1844,7 +1844,7 @@ def update_match_status():
             return jsonify({'error': 'Invalid decision'}), 400
 
         # Get user
-        user = Task.query.filter_by(email=user_email).first()
+        user = User.query.filter_by(email=user_email).first()
         if not user:
             return jsonify({'error': 'User not found'}), 404
 
@@ -1942,8 +1942,8 @@ def send_message():
         return jsonify({'error': 'Missing data'}), 400
 
     # Look up user IDs based on emails
-    sender = Task.query.filter_by(email=sender_email).first()
-    receiver = Task.query.filter_by(email=receiver_email).first()
+    sender = User.query.filter_by(email=sender_email).first()
+    receiver = User.query.filter_by(email=receiver_email).first()
 
     if not sender or not receiver:
         return jsonify({'error': 'Sender or receiver not found'}), 404
@@ -1970,8 +1970,8 @@ def handle_message(data):
     message = data['message']
 
     # Look up user IDs based on emails
-    sender = Task.query.filter_by(email=sender_email).first()
-    receiver = Task.query.filter_by(email=receiver_email).first()
+    sender = User.query.filter_by(email=sender_email).first()
+    receiver = User.query.filter_by(email=receiver_email).first()
 
     if not sender or not receiver:
         emit('error', {'error': 'Sender or receiver not found'})
@@ -1993,7 +1993,7 @@ def handle_message(data):
 @socketio.on('join')
 def on_join(data):
     user_email = data['user_email']
-    user = Task.query.filter_by(email=user_email).first()
+    user = User.query.filter_by(email=user_email).first()
 
     if not user:
         emit('error', {'error': 'User not found'})
@@ -2012,8 +2012,8 @@ def get_chats():
         return jsonify({'error': 'Missing email addresses'}), 400
 
     # Retrieve user IDs based on the provided emails
-    user1 = Task.query.filter_by(email=email1).first()
-    user2 = Task.query.filter_by(email=email2).first()
+    user1 = User.query.filter_by(email=email1).first()
+    user2 = User.query.filter_by(email=email2).first()
 
     if not user1 or not user2:
         return jsonify({'error': 'One or both users not found'}), 404
