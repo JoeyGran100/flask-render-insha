@@ -61,8 +61,8 @@ class UserProfile(db.Model):
     user = db.relationship('Task', backref=db.backref('profile', uselist=False))
 
 
-class UserPreferences(db.Model):
-    __tablename__ = 'user_preferences'
+class UserInfo(db.Model):
+    __tablename__ = 'user_info'
 
     id = db.Column(db.Integer, primary_key=True)
     user_profile_id = db.Column(db.Integer,db.ForeignKey('user_profile.id'),nullable=False,unique=True)
@@ -75,7 +75,7 @@ class UserPreferences(db.Model):
     smokestatus = db.Column(db.String(25))
     halalfood = db.Column(db.String(25))
 
-    profile = db.relationship('UserProfile',backref=db.backref('preferences', uselist=False))
+    profile = db.relationship('UserProfile',backref=db.backref('info', uselist=False))
 
 
 class UserCharacter(db.Model):
@@ -919,7 +919,7 @@ def postUserProfileData():
         if profile.preferences:
             prefs = profile.preferences
         else:
-            prefs = UserPreferences(profile=profile)
+            prefs = UserInfo(profile=profile)
             db.session.add(prefs)
 
         prefs.hobbies = data.get('hobbies')
@@ -973,10 +973,10 @@ def getUserProfileData():
 
 # USERPROFILE -> End
 
-# USERPREFERENCES -> Start
+# USERINFO -> Start
 
-@app.route('/userPreferences', methods=['POST'])
-def postUserPreferences():
+@app.route('/userInfo', methods=['POST'])
+def postUserInfo():
     try:
         data = request.get_json()
         user_profile_id = data['user_profile_id']
@@ -989,11 +989,11 @@ def postUserPreferences():
         # Check if preferences already exist
         prefs = profile.preferences
         if prefs:
-            message = "Updated user preferences"
+            message = "Updated user info"
         else:
-            prefs = UserPreferences(profile=profile)
+            prefs = UserInfo(profile=profile)
             db.session.add(prefs)
-            message = "Created user preferences"
+            message = "Created user info"
 
         # Update fields
         prefs.hobbies = data.get('hobbies', [])
@@ -1012,10 +1012,10 @@ def postUserPreferences():
         return jsonify({'error': f'Internal Server Error: {e}'}), 500
 
 # get ALL users preferences
-@app.route('/userPreferences', methods=['GET'])
-def getUserPreferences():
+@app.route('/userInfo', methods=['GET'])
+def getUserInfo():
     try:
-        all_prefs = UserPreferences.query.all()
+        all_prefs = UserInfo.query.all()
         result = []
 
         for prefs in all_prefs:
@@ -1035,19 +1035,19 @@ def getUserPreferences():
             }
             result.append(user_data)
 
-        return jsonify({'user_preferences': result}), 200
+        return jsonify({'user_info': result}), 200
 
     except Exception as e:
         return jsonify({'error': f'Internal Server Error: {e}'}), 500
 
 # get SINGLE users preferences
 
-@app.route('/userPreferences/<int:user_profile_id>', methods=['GET'])
-def getUserPreferencesById(user_profile_id):
+@app.route('/userInfo/<int:user_profile_id>', methods=['GET'])
+def getUserInfoById(user_profile_id):
     try:
-        prefs = UserPreferences.query.filter_by(user_profile_id=user_profile_id).first()
+        prefs = UserInfo.query.filter_by(user_profile_id=user_profile_id).first()
         if not prefs:
-            return jsonify({'error': 'UserPreferences not found'}), 404
+            return jsonify({'error': 'UserInfo not found'}), 404
 
         profile = prefs.profile
         user_data = {
@@ -1063,7 +1063,7 @@ def getUserPreferencesById(user_profile_id):
             'smokestatus': prefs.smokestatus,
             'halalfood': prefs.halalfood
         }
-        return jsonify({'user_preferences': user_data}), 200
+        return jsonify({'user_info': user_data}), 200
 
     except Exception as e:
         return jsonify({'error': f'Internal Server Error: {e}'}), 500
