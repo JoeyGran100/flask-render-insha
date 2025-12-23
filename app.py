@@ -962,13 +962,12 @@ def postUserInfo():
         data = request.get_json()
         user_profile_id = data['user_profile_id']
 
-        # Find the corresponding profile
         profile = UserProfile.query.get(user_profile_id)
         if not profile:
             return jsonify({'error': 'UserProfile not found'}), 404
 
-        # Check if preferences already exist
-        prefs = profile.preferences
+        # ✅ FIXED HERE
+        prefs = profile.info
         if prefs:
             message = "Updated user info"
         else:
@@ -976,7 +975,6 @@ def postUserInfo():
             db.session.add(prefs)
             message = "Created user info"
 
-        # Update fields
         prefs.hobbies = data.get('hobbies', [])
         prefs.preferences = data.get('preferences', [])
         prefs.bio = data.get('bio')
@@ -991,6 +989,7 @@ def postUserInfo():
 
     except Exception as e:
         return jsonify({'error': f'Internal Server Error: {e}'}), 500
+
 
 # get ALL users preferences
 @app.route('/userInfo', methods=['GET'])
