@@ -855,30 +855,19 @@ def postData():
         if not re.match(email_regex, new_email):
             return jsonify({'message': 'Invalid email format'}), 400
 
-        # Check if email already exists
+        # Check if the email already exists
         existing_user = User.query.filter_by(email=new_email).first()
         if existing_user:
             return jsonify({'message': 'Email already exists'}), 400
 
-        # Create new user in Task table
-        new_user = User(email=new_email, password=new_password)
-        db.session.add(new_user)
+        # Create new user
+        newUserDetails = User(email=new_email, password=new_password)
+        db.session.add(newUserDetails)
         db.session.commit()
-
-        # Return the id of the created user (to use as user_auth_id later)
-        return jsonify({
-            'message': 'User added successfully',
-            'user_auth_id': new_user.id
-        }), 201
-
-    except IntegrityError as ie:
-        # Rollback in case of unique constraint violations
-        db.session.rollback()
-        return jsonify({'message': 'Email already exists'}), 400
+        return jsonify({'message': "New User added"}), 201
 
     except Exception as e:
-        db.session.rollback()
-        print("Signup error:", e)
+        print(e)
         return jsonify({'error': 'Internal Server Error'}), 500
 
 # METHOD TO GET AUTHENTICATED USERS LIST -> End
