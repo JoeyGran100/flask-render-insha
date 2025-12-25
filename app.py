@@ -13,6 +13,7 @@ from flask import request, jsonify
 import traceback
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.exc import IntegrityError
+import jwt
 
 app = Flask(__name__)
 app.config[
@@ -22,6 +23,7 @@ db = SQLAlchemy(app)
 
 # Set the upload folder configuration
 app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['SECRET_KEY'] = 'super-secret-key-change-this'
 
 # Ensure the uploads folder exists
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -230,6 +232,29 @@ with app.app_context():
 
 def has_user_checked_in(user_id, location_id):
     return db.session.query(CheckIn).filter_by(user_id=user_id, location_id=location_id).first() is not None
+
+def create_token(user):
+    payload = {
+        "user_id": user.id,
+        "exp": datetime.utcnow() + timedelta(days=7)
+    }
+    return jwt.encode(payload, app.config['SECRET_KEY'], algorithm="HS256")
+
+
+def get_current_user_from_token():
+    auth_header = request.headers.get('Authorization', None)
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return None
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        user_id = payload.get('user_id')
+        return User.query.get(user_id)
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
 
 
 # I changed this, be aware!
@@ -784,6 +809,7 @@ def trigger_matchmaking_for_location(location_id):
 
 
 # USER SIGNIN METHOD -> Start
+SECRET_KEY = app.config['SECRET_KEY']
 
 @app.route('/sign-in', methods=['POST'])
 def sign_in():
@@ -796,17 +822,20 @@ def sign_in():
             return jsonify({'error': 'Email and password are required'}), 400
 
         user = User.query.filter_by(email=email).first()
-
-        if user:
-            if password == user.password:
-                return jsonify({
-                    'message': 'Sign in successful',
-                    'user_auth_id': user.id  # <-- include User ID
-                }), 200
-            else:
-                return jsonify({'message': 'Invalid credentials'}), 401
-        else:
+        if not user or password != user.password:
             return jsonify({'message': 'Invalid credentials'}), 401
+
+        # Create JWT token
+        payload = {
+            'user_id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)  # token expires in 7 days
+        }
+        token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+
+        return jsonify({
+            'message': 'Sign in successful',
+            'token': token
+        }), 200
 
     except Exception as e:
         print("Sign-in error:", e)
@@ -825,6 +854,7 @@ def get_signin_data():
         for rel in signin
     ]
     return jsonify(data)
+
 
 # USER SIGNIN METHOD -> End
 
@@ -876,16 +906,13 @@ def postData():
 
 @app.route('/userProfile', methods=['POST'])
 def postUserProfileData():
+    user = get_current_user_from_token()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+
     data = request.get_json()
 
-    user_id = data['user_auth_id']
-    user = User.query.get(user_id)
-
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-
     profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
-
     if not profile:
         profile = UserProfile(user_auth_id=user.id)
         db.session.add(profile)
