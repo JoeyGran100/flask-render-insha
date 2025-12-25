@@ -249,13 +249,14 @@ def get_current_user_from_token():
 
     token = auth_header.split(" ")[1]
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         user_id = payload.get('user_id')
         return User.query.get(user_id)
     except jwt.ExpiredSignatureError:
         return None
     except jwt.InvalidTokenError:
         return None
+
 
 @app.route('/sign-in', methods=['POST'])
 def sign_in():
@@ -271,21 +272,18 @@ def sign_in():
         if not user or password != user.password:
             return jsonify({'message': 'Invalid credentials'}), 401
 
-        # Create JWT token
         payload = {
             'user_id': user.id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)  # token expires in 7 days
+            'exp': datetime.utcnow() + timedelta(days=7)
         }
-        token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+        token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
+        if isinstance(token, bytes):
+            token = token.decode('utf-8')
 
-        return jsonify({
-            'message': 'Sign in successful',
-            'token': token
-        }), 200
-
+        return jsonify({'message': 'Sign in successful', 'token': token}), 200
     except Exception as e:
         print("Sign-in error:", e)
-        return jsonify({'error': 'Internal Server Error'}), 500
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/sign-in', methods=['GET'])
@@ -927,7 +925,7 @@ def postUserProfileData():
     profile.firstname = data.get('firstname')
     profile.lastname = data.get('lastname')
     profile.gender = data.get('gender')
-    profile.email = data.get('email')
+    profile.email = data.get('email')  # optional, backend can rely on user.email
     profile.phone_number = data.get('phone_number')
     profile.age = data.get('age')
     profile.sect = data.get('sect')
