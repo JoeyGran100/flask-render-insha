@@ -327,39 +327,34 @@ def postData():
         if not new_email or not new_password:
             return jsonify({'error': 'Email and password are required'}), 400
 
+        # Validate email
         email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
         if not re.match(email_regex, new_email):
             return jsonify({'message': 'Invalid email format'}), 400
 
+        # Check if email exists
         if User.query.filter_by(email=new_email).first():
             return jsonify({'message': 'Email already exists'}), 400
 
+        # Create user
         new_user = User(email=new_email, password=new_password)
         db.session.add(new_user)
         db.session.commit()
 
-        # Generate JWT token
+        # Create token
         payload = {
             'user_id': new_user.id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+            'exp': datetime.utcnow() + timedelta(days=7)
         }
-        token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
-
-        # Ensure token is string
+        token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
         if isinstance(token, bytes):
             token = token.decode('utf-8')
-        if not token:
-            raise ValueError("Token generation failed")
-
-        # Debug print to confirm token
-        print(f"[DEBUG] Generated token for {new_email}: {token}")
 
         return jsonify({'message': "New User added", 'token': token}), 201
 
     except Exception as e:
-        print("Signup error:", e)
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
-
 
 
 # I changed this, be aware!
