@@ -907,6 +907,23 @@ def trigger_matchmaking_for_location(location_id):
 
 # METHOD TO GET AUTHENTICATED USERS LIST -> End
 
+# Fetch loggedinusers info -> Start
+
+@app.route('/me', methods=['GET'])
+def get_me():
+    user = get_current_user_from_token()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    return jsonify(profile.to_dict()), 200
+
+# Fetch loggedinusers info -> End
+
+
 # USERPROFILE -> Start
 
 @app.route('/userProfile', methods=['POST'])
