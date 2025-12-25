@@ -980,24 +980,44 @@ def getUserProfileData():
 @app.route('/userInfo', methods=['POST'])
 def postUserInfo():
     try:
+        print("📥 /userInfo called")
+
+        # --- Auth ---
         user = get_current_user_from_token()
         if not user:
+            print("⛔ Unauthorized: invalid or missing token")
             return jsonify({'error': 'Unauthorized'}), 401
 
+        print(f"✅ Authenticated user_id={user.id}")
+
+        # --- Profile ---
         profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
         if not profile:
+            print(f"❌ No UserProfile found for user_id={user.id}")
             return jsonify({'error': 'UserProfile not found'}), 404
 
-        data = request.get_json()
+        print(f"📄 UserProfile found: profile_id={profile.id}")
 
+        # --- Request body ---
+        data = request.get_json()
+        if not data:
+            print("⚠️ Empty JSON body received")
+            return jsonify({'error': 'Invalid JSON'}), 400
+
+        print(f"📦 Payload received: {data}")
+
+        # --- UserInfo ---
         prefs = profile.info
         if not prefs:
+            print("➕ Creating new UserInfo record")
             prefs = UserInfo(profile=profile)
             db.session.add(prefs)
             message = "Created user info"
         else:
+            print(f"✏️ Updating UserInfo id={prefs.id}")
             message = "Updated user info"
 
+        # --- Assign fields ---
         prefs.hobbies = data.get('hobbies', [])
         prefs.preferences = data.get('preferences', [])
         prefs.bio = data.get('bio')
@@ -1007,12 +1027,20 @@ def postUserInfo():
         prefs.smokestatus = data.get('smokestatus')
         prefs.halalfood = data.get('halalfood')
 
+        print("💾 Committing changes to DB")
         db.session.commit()
+
+        print("✅ /userInfo completed successfully")
         return jsonify({'message': message}), 200
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        print("🔥 ERROR in /userInfo")
+        print(str(e))
+        import traceback
+        traceback.print_exc()
+
+        return jsonify({'error': 'Internal Server Error'}), 500
 
 
 # get ALL users preferences
