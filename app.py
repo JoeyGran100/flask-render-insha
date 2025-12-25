@@ -980,21 +980,23 @@ def getUserProfileData():
 @app.route('/userInfo', methods=['POST'])
 def postUserInfo():
     try:
-        data = request.get_json()
-        user_profile_id = data['user_profile_id']
+        user = get_current_user_from_token()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
 
-        profile = UserProfile.query.get(user_profile_id)
+        profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
         if not profile:
             return jsonify({'error': 'UserProfile not found'}), 404
 
-        # ✅ FIXED HERE
+        data = request.get_json()
+
         prefs = profile.info
-        if prefs:
-            message = "Updated user info"
-        else:
+        if not prefs:
             prefs = UserInfo(profile=profile)
             db.session.add(prefs)
             message = "Created user info"
+        else:
+            message = "Updated user info"
 
         prefs.hobbies = data.get('hobbies', [])
         prefs.preferences = data.get('preferences', [])
@@ -1009,7 +1011,8 @@ def postUserInfo():
         return jsonify({'message': message}), 200
 
     except Exception as e:
-        return jsonify({'error': f'Internal Server Error: {e}'}), 500
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 
 # get ALL users preferences
@@ -1076,19 +1079,19 @@ def getUserInfoById(user_profile_id):
 @app.route('/userCharacter', methods=['POST'])
 def postUserCharacter():
     try:
-        data = request.get_json(force=True)
+        user = get_current_user_from_token()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
 
-        user_profile_id = data.get('user_profile_id')
-        if not user_profile_id:
-            return jsonify({'error': 'user_profile_id is required'}), 400
-
-        profile = UserProfile.query.get(user_profile_id)
+        profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
         if not profile:
             return jsonify({'error': 'UserProfile not found'}), 404
 
+        data = request.get_json()
+
         character = profile.character
         if not character:
-            character = UserCharacter(user_profile_id=profile.id)
+            character = UserCharacter(profile=profile)
             db.session.add(character)
 
         character.muslimstatus = data.get('muslimstatus')
