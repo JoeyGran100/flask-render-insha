@@ -24,6 +24,7 @@ db = SQLAlchemy(app)
 # Set the upload folder configuration
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = 'a8f4c2e1b5d6f7a8c9e0d1f2b3a4c5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2'
+SECRET_KEY = app.config['SECRET_KEY']
 
 # Ensure the uploads folder exists
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -255,6 +256,110 @@ def get_current_user_from_token():
         return None
     except jwt.InvalidTokenError:
         return None
+
+@app.route('/sign-in', methods=['POST'])
+def sign_in():
+    try:
+        data = request.get_json()
+        email = data.get('email')
+        password = data.get('password')
+
+        if not email or not password:
+            return jsonify({'error': 'Email and password are required'}), 400
+
+        user = User.query.filter_by(email=email).first()
+        if not user or password != user.password:
+            return jsonify({'message': 'Invalid credentials'}), 401
+
+        # Create JWT token
+        payload = {
+            'user_id': user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)  # token expires in 7 days
+        }
+        token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+
+        return jsonify({
+            'message': 'Sign in successful',
+            'token': token
+        }), 200
+
+    except Exception as e:
+        print("Sign-in error:", e)
+        return jsonify({'error': 'Internal Server Error'}), 500
+
+
+@app.route('/sign-in', methods=['GET'])
+def get_signin_data():
+    signin = User.query.all()
+    data = [
+        {
+            'id': rel.id,
+            'email': rel.email,
+            'password': rel.password,
+        }
+        for rel in signin
+    ]
+    return jsonify(data)
+
+
+# USER SIGNIN METHOD -> End
+
+# METHOD TO GET AUTHENTICATED USERS LIST -> Start
+
+@app.get("/users")
+def home():
+    tasks = User.query.all()
+    task_list = [
+        {'id': task.id, 'email': task.email, 'password': task.password} for task in tasks
+    ]
+    return jsonify({"user_details": task_list})
+
+
+# POST USER CREDENTIALS TO DATABASE
+
+@app.route('/users', methods=['POST'])
+def postData():
+    try:
+        data = request.get_json()
+        new_email = data.get('email')
+        new_password = data.get('password')
+
+        if not new_email or not new_password:
+            return jsonify({'error': 'Email and password are required'}), 400
+
+        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not re.match(email_regex, new_email):
+            return jsonify({'message': 'Invalid email format'}), 400
+
+        if User.query.filter_by(email=new_email).first():
+            return jsonify({'message': 'Email already exists'}), 400
+
+        new_user = User(email=new_email, password=new_password)
+        db.session.add(new_user)
+        db.session.commit()
+
+        # Generate JWT token
+        payload = {
+            'user_id': new_user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
+        }
+        token = jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
+
+        # Ensure token is string
+        if isinstance(token, bytes):
+            token = token.decode('utf-8')
+        if not token:
+            raise ValueError("Token generation failed")
+
+        # Debug print to confirm token
+        print(f"[DEBUG] Generated token for {new_email}: {token}")
+
+        return jsonify({'message': "New User added", 'token': token}), 201
+
+    except Exception as e:
+        print("Signup error:", e)
+        return jsonify({'error': str(e)}), 500
+
 
 
 # I changed this, be aware!
@@ -806,108 +911,6 @@ def trigger_matchmaking_for_location(location_id):
         print(f"Error in automatic matchmaking: {str(e)}")
         db.session.rollback()
         return None
-
-
-# USER SIGNIN METHOD -> Start
-SECRET_KEY = app.config['SECRET_KEY']
-
-@app.route('/sign-in', methods=['POST'])
-def sign_in():
-    try:
-        data = request.get_json()
-        email = data.get('email')
-        password = data.get('password')
-
-        if not email or not password:
-            return jsonify({'error': 'Email and password are required'}), 400
-
-        user = User.query.filter_by(email=email).first()
-        if not user or password != user.password:
-            return jsonify({'message': 'Invalid credentials'}), 401
-
-        # Create JWT token
-        payload = {
-            'user_id': user.id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)  # token expires in 7 days
-        }
-        token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
-
-        return jsonify({
-            'message': 'Sign in successful',
-            'token': token
-        }), 200
-
-    except Exception as e:
-        print("Sign-in error:", e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-
-
-@app.route('/sign-in', methods=['GET'])
-def get_signin_data():
-    signin = User.query.all()
-    data = [
-        {
-            'id': rel.id,
-            'email': rel.email,
-            'password': rel.password,
-        }
-        for rel in signin
-    ]
-    return jsonify(data)
-
-
-# USER SIGNIN METHOD -> End
-
-# METHOD TO GET AUTHENTICATED USERS LIST -> Start
-
-@app.get("/users")
-def home():
-    tasks = User.query.all()
-    task_list = [
-        {'id': task.id, 'email': task.email, 'password': task.password} for task in tasks
-    ]
-    return jsonify({"user_details": task_list})
-
-
-# POST USER CREDENTIALS TO DATABASE
-
-@app.route('/users', methods=['POST'])
-def postData():
-    try:
-        data = request.get_json()
-        new_email = data.get('email')
-        new_password = data.get('password')
-
-        if not new_email or not new_password:
-            return jsonify({'error': 'Email and password are required'}), 400
-
-        # Validate email
-        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-        if not re.match(email_regex, new_email):
-            return jsonify({'message': 'Invalid email format'}), 400
-
-        # Check if email exists
-        if User.query.filter_by(email=new_email).first():
-            return jsonify({'message': 'Email already exists'}), 400
-
-        # Create user
-        new_user = User(email=new_email, password=new_password)
-        db.session.add(new_user)
-        db.session.commit()
-
-        # Create token AFTER commit
-        payload = {
-            'user_id': new_user.id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
-        }
-        token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
-
-        return jsonify({'message': "New User added", 'token': token}), 201
-
-    except Exception as e:
-        print("Signup error:", e)
-        return jsonify({'error': 'Internal Server Error'}), 500
-
 
 # METHOD TO GET AUTHENTICATED USERS LIST -> End
 
