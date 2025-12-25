@@ -23,7 +23,7 @@ db = SQLAlchemy(app)
 
 # Set the upload folder configuration
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['SECRET_KEY'] = 'super-secret-key-change-this'
+app.config['SECRET_KEY'] = 'a8f4c2e1b5d6f7a8c9e0d1f2b3a4c5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2'
 
 # Ensure the uploads folder exists
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
