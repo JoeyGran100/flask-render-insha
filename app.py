@@ -881,33 +881,33 @@ def postData():
         if not new_email or not new_password:
             return jsonify({'error': 'Email and password are required'}), 400
 
-        # Validate email format
+        # Validate email
         email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
         if not re.match(email_regex, new_email):
             return jsonify({'message': 'Invalid email format'}), 400
 
-        # Check if the email already exists
-        existing_user = User.query.filter_by(email=new_email).first()
-        if existing_user:
+        # Check if email exists
+        if User.query.filter_by(email=new_email).first():
             return jsonify({'message': 'Email already exists'}), 400
 
-        # Create new user
-        newUserDetails = User(email=new_email, password=new_password)
-        db.session.add(newUserDetails)
+        # Create user
+        new_user = User(email=new_email, password=new_password)
+        db.session.add(new_user)
         db.session.commit()
 
-        # Create JWT token for the new user
+        # Create token AFTER commit
         payload = {
-            'user_id': newUserDetails.id,
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)  # expires in 7 days
+            'user_id': new_user.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)
         }
         token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
 
         return jsonify({'message': "New User added", 'token': token}), 201
 
     except Exception as e:
-        print(e)
+        print("Signup error:", e)
         return jsonify({'error': 'Internal Server Error'}), 500
+
 
 # METHOD TO GET AUTHENTICATED USERS LIST -> End
 
