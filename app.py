@@ -870,6 +870,7 @@ def home():
 
 
 # POST USER CREDENTIALS TO DATABASE
+
 @app.route('/users', methods=['POST'])
 def postData():
     try:
@@ -894,7 +895,15 @@ def postData():
         newUserDetails = User(email=new_email, password=new_password)
         db.session.add(newUserDetails)
         db.session.commit()
-        return jsonify({'message': "New User added"}), 201
+
+        # Create JWT token for the new user
+        payload = {
+            'user_id': newUserDetails.id,
+            'exp': datetime.datetime.utcnow() + datetime.timedelta(days=7)  # expires in 7 days
+        }
+        token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+
+        return jsonify({'message': "New User added", 'token': token}), 201
 
     except Exception as e:
         print(e)
