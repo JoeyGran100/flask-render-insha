@@ -909,17 +909,63 @@ def trigger_matchmaking_for_location(location_id):
 
 # Fetch loggedinusers info -> Start
 
-@app.route('/me', methods=['GET'])
+@app.route('/loggedinUserProfileData', methods=['GET'])
 def get_me():
     user = get_current_user_from_token()
     if not user:
-        return jsonify({'error': 'Unauthorized'}), 401
+        return jsonify({"error": "Unauthorized"}), 401
 
+    # Fetch profile
     profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
     if not profile:
-        return jsonify({'error': 'Profile not found'}), 404
+        return jsonify({"error": "Profile not found"}), 404
 
-    return jsonify(profile.to_dict()), 200
+    # Related one-to-one tables (via relationships)
+    info = profile.info
+    character = profile.character
+
+    # Images (one-to-many)
+    images = UserImages.query.filter_by(user_auth_id=user.id).all()
+
+    return jsonify({
+        "auth": {
+            "id": user.id,
+            "email": getattr(user, "email", None)
+        },
+        "profile": {
+            "firstname": profile.firstname,
+            "lastname": profile.lastname,
+            "gender": profile.gender,
+            "email": profile.email,
+            "age": profile.age,
+            "phone_number": profile.phone_number,
+            "sect": profile.sect,
+            "lookingfor": profile.lookingfor,
+        },
+        "info": {
+            "hobbies": info.hobbies if info else [],
+            "preferences": info.preferences if info else [],
+            "bio": info.bio if info else None,
+            "alcoholstatus": info.alcoholstatus if info else None,
+            "childrenstatus": info.childrenstatus if info else None,
+            "maritalstatus": info.maritalstatus if info else None,
+            "smokestatus": info.smokestatus if info else None,
+            "halalfood": info.halalfood if info else None,
+        },
+        "character": {
+            "muslimstatus": character.muslimstatus if character else None,
+            "practicing": character.practicing if character else None,
+            "nationality": character.nationality if character else None,
+            "personality_type": character.personality_type if character else None,
+        },
+        "images": [
+            {
+                "id": img.id,
+                "imageString": img.imageString
+            } for img in images
+        ]
+    }), 200
+
 
 # Fetch loggedinusers info -> End
 
