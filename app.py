@@ -244,6 +244,7 @@ def create_token(user):
 
 def get_current_user_from_token():
     auth_header = request.headers.get('Authorization', None)
+    print("Authorization header received:", auth_header)
     if not auth_header or not auth_header.startswith("Bearer "):
         print("No Authorization header or wrong format")
         return None
