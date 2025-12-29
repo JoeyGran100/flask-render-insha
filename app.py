@@ -245,17 +245,24 @@ def create_token(user):
 def get_current_user_from_token():
     auth_header = request.headers.get('Authorization', None)
     if not auth_header or not auth_header.startswith("Bearer "):
+        print("No Authorization header or wrong format")
         return None
 
     token = auth_header.split(" ")[1]
     try:
         payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+        print("Decoded JWT payload:", payload)
         user_id = payload.get('user_id')
-        return User.query.get(user_id)
+        user = User.query.get(user_id)
+        print("Fetched user from DB:", user)
+        return user
     except jwt.ExpiredSignatureError:
+        print("JWT expired")
         return None
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        print("JWT invalid:", e)
         return None
+
 
 
 @app.route('/sign-in', methods=['POST'])
