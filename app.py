@@ -244,7 +244,6 @@ def create_token(user):
 
 def get_current_user_from_token():
     auth_header = request.headers.get('Authorization', None)
-    print("Authorization header received:", auth_header)
     if not auth_header or not auth_header.startswith("Bearer "):
         print("No Authorization header or wrong format")
         return None
@@ -254,23 +253,15 @@ def get_current_user_from_token():
         payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         print("Decoded JWT payload:", payload)
         user_id = payload.get('user_id')
-        if not user_id:
-            print("No user_id in token payload")
-            return None
-
         user = User.query.get(user_id)
         print("Fetched user from DB:", user)
-        if not user:
-            print(f"No user found with id {user_id}")
         return user
-
     except jwt.ExpiredSignatureError:
         print("JWT expired")
         return None
     except jwt.InvalidTokenError as e:
         print("JWT invalid:", e)
         return None
-
 
 
 
@@ -945,7 +936,7 @@ def get_me():
 
     return jsonify({
         "auth": {
-            "user_id": user.user_id,
+            "user_id": user.id,
             "email": getattr(user, "email", None)
         },
         "profile": {
