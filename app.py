@@ -59,7 +59,7 @@ class UserProfile(db.Model):
     age = db.Column(db.String(10))
     phone_number = db.Column(db.String(50))
     sect = db.Column(db.String(50))
-    lookingfor = db.Column(db.String(50))
+    lookingfor = db.Column(db.String(255))
     
     user = db.relationship('User', backref=db.backref('profile', uselist=False))
 
@@ -929,7 +929,7 @@ def get_me():
 
     return jsonify({
         "auth": {
-            "id": user.id,
+            "user_id": user.user_id,
             "email": getattr(user, "email", None)
         },
         "profile": {
