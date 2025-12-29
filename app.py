@@ -254,15 +254,23 @@ def get_current_user_from_token():
         payload = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
         print("Decoded JWT payload:", payload)
         user_id = payload.get('user_id')
+        if not user_id:
+            print("No user_id in token payload")
+            return None
+
         user = User.query.get(user_id)
         print("Fetched user from DB:", user)
+        if not user:
+            print(f"No user found with id {user_id}")
         return user
+
     except jwt.ExpiredSignatureError:
         print("JWT expired")
         return None
     except jwt.InvalidTokenError as e:
         print("JWT invalid:", e)
         return None
+
 
 
 
