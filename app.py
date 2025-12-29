@@ -916,8 +916,9 @@ def trigger_matchmaking_for_location(location_id):
 
 # Fetch loggedinusers info -> Start
 
-@app.route('/loggedinUserProfileData', methods=['GET'])
-def get_me():
+@app.route("/loggedinUserProfileData", methods=["GET"])
+def logged_in_user_profile():
+    """Return full profile data for the logged-in user."""
     user = get_current_user_from_token()
     if not user:
         return jsonify({"error": "Unauthorized"}), 401
@@ -927,11 +928,8 @@ def get_me():
     if not profile:
         return jsonify({"error": "Profile not found"}), 404
 
-    # Related one-to-one tables (via relationships)
     info = profile.info
     character = profile.character
-
-    # Images (one-to-many)
     images = UserImages.query.filter_by(user_auth_id=user.id).all()
 
     return jsonify({
@@ -966,10 +964,7 @@ def get_me():
             "personality_type": character.personality_type if character else None,
         },
         "images": [
-            {
-                "id": img.id,
-                "imageString": img.imageString
-            } for img in images
+            {"id": img.id, "imageString": img.imageString} for img in images
         ]
     }), 200
 
