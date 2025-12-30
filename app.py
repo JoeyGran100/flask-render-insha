@@ -14,6 +14,7 @@ import traceback
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.exc import IntegrityError
 import jwt
+import logging
 
 app = Flask(__name__)
 app.config[
@@ -25,6 +26,11 @@ db = SQLAlchemy(app)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['SECRET_KEY'] = 'a8f4c2e1b5d6f7a8c9e0d1f2b3a4c5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2'
 SECRET_KEY = app.config['SECRET_KEY']
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 # Ensure the uploads folder exists
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -916,23 +922,45 @@ def trigger_matchmaking_for_location(location_id):
 
 # Fetch loggedinusers info -> Start
 
+
 @app.route("/loggedinUserProfileData", methods=["GET"])
 def logged_in_user_profile():
-    """Return full profile data for the logged-in user."""
+    logging.debug("➡️  /loggedinUserProfileData endpoint hit")
+
+    # Get current user
     user = get_current_user_from_token()
+    logging.debug(f"User from token: {user}")
+
     if not user:
+        logging.warning("❌ Unauthorized access: No user from token")
         return jsonify({"error": "Unauthorized"}), 401
 
     # Fetch profile
+    logging.debug(f"Fetching UserProfile for user_auth_id={user.id}")
     profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
+
     if not profile:
+        logging.warning(f"❌ Profile not found for user_auth_id={user.id}")
         return jsonify({"error": "Profile not found"}), 404
 
+    logging.debug(f"✅ Profile found: profile_id={profile.id}")
+
+    # Related tables
     info = profile.info
     character = profile.character
-    images = UserImages.query.filter_by(user_auth_id=user.id).all()
 
-    return jsonify({
+    logging.debug(f"Info object: {info}")
+    logging.debug(f"Character object: {character}")
+
+    # Images
+    logging.debug(f"Fetching images for user_auth_id={user.id}")
+    images = UserImages.query.filter_by(user_auth_id=user.id).all()
+    logging.debug(f"Images count: {len(images)}")
+
+    # Final response
+    logging.debug("✅ Building response payload")
+
+    response = {
         "auth": {
             "user_id": user.id,
             "email": getattr(user, "email", None)
@@ -966,7 +994,10 @@ def logged_in_user_profile():
         "images": [
             {"id": img.id, "imageString": img.imageString} for img in images
         ]
-    }), 200
+    }
+
+    logging.debug("✅ Response successfully built and returned")
+    return jsonify(response), 200
 
 
 # Fetch loggedinusers info -> End
