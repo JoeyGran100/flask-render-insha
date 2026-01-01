@@ -384,9 +384,14 @@ def get_posts_by_user(user_id):
 
 
 def serialize_post(post: Post):
+    # Fetch the UserProfile for the post author
+    profile = UserProfile.query.filter_by(user_auth_id=post.author_id).first()
+
     return {
         "id": post.id,
         "author_id": post.author_id,
+        "author_name": f"{profile.firstname} {profile.lastname}" if profile else None,
+        "author_email": profile.email if profile else None,
         "text": post.text,
         "post_type": post.post_type,
         "media_url": post.media_url,
