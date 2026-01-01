@@ -369,6 +369,34 @@ def create_post():
     return {"id": post.id}, 201
 
 
+@app.route('/posts/user/<int:user_id>', methods=['GET'])
+def get_posts_by_user(user_id):
+    posts = (
+        Post.query
+        .filter_by(author_id=user_id, is_deleted=False)
+        .order_by(Post.created_at.desc())
+        .all()
+    )
+
+    return {
+        "posts": [serialize_post(post) for post in posts]
+    }, 200
+
+
+def serialize_post(post: Post):
+    return {
+        "id": post.id,
+        "author_id": post.author_id,
+        "text": post.text,
+        "post_type": post.post_type,
+        "media_url": post.media_url,
+        "parent_id": post.parent_id,
+        "created_at": post.created_at.isoformat(),
+        "is_deleted": post.is_deleted,
+        "hashtags": [tag.name for tag in post.hashtags]
+    }
+
+
 @app.route('/posts/<int:post_id>/like', methods=['POST'])
 def like_post(post_id):
     user_id = request.json['user_id']
