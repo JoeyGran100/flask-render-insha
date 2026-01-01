@@ -18,7 +18,7 @@ import logging
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp2_render_example_user:YyxBMcdk0vIsMKU8i2IWEiINI41BVyLM@dpg-d55cjvemcj7s73f9e5jg-a.frankfurt-postgres.render.com/inshaapp2_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp3_render_example_user:8WOoUOV9yQn1Q3cnPc8KnEl20cok8Npd@dpg-d5b6tseuk2gs73f3jbl0-a.frankfurt-postgres.render.com/inshaapp3_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -52,6 +52,8 @@ class User(db.Model):
     email = db.Column(db.String(200), unique=True, nullable=False)
     password = db.Column(db.String, nullable=False)
 
+    created_at = db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
+
 
 class UserProfile(db.Model):
     __tablename__ = 'user_profile'
@@ -66,6 +68,8 @@ class UserProfile(db.Model):
     phone_number = db.Column(db.String(50))
     sect = db.Column(db.String(50))
     lookingfor = db.Column(db.String(255))
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     user = db.relationship('User', backref=db.backref('profile', uselist=False))
 
@@ -227,6 +231,113 @@ class Match(db.Model):
     location = db.relationship('LocationInfo', backref=db.backref('matches_at_location', lazy=True))
 
 
+# 1️⃣ Association tables FIRST
+post_hashtag = db.Table(
+    'post_hashtag',
+    db.Column('post_id', db.Integer, db.ForeignKey('post.id'), primary_key=True),
+    db.Column('hashtag_id', db.Integer, db.ForeignKey('hashtag.id'), primary_key=True)
+)
+    
+    
+class Post(db.Model):
+    __tablename__ = 'post'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    author_id = db.Column(
+        db.Integer,
+        db.ForeignKey('userdetails.id'),
+        nullable=False
+    )
+
+    text = db.Column(db.Text, nullable=False)
+
+    post_type = db.Column(db.String(20))  # text, image, video
+    media_url = db.Column(db.String(255), nullable=True)
+
+    # Threading (comments / replies)
+    parent_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=True)
+    replies = db.relationship(
+        'Post',
+        backref=db.backref('parent', remote_side=[id]),
+        lazy=True
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
+
+    is_deleted = db.Column(db.Boolean, default=False)
+
+    # Hashtags relationship
+    hashtags = db.relationship(
+        'Hashtag',
+        secondary='post_hashtag',
+        backref='posts'
+    )
+
+
+class Hashtag(db.Model):
+    __tablename__ = 'hashtag'
+
+    id = db.Column(db.Integer, primary_key=True)
+    tag = db.Column(db.String(50), unique=True, nullable=False)
+
+
+class Like(db.Model):
+    __tablename__ = 'like'
+
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey('userdetails.id'),
+        primary_key=True
+    )
+    post_id = db.Column(
+        db.Integer,
+        db.ForeignKey('post.id'),
+        primary_key=True
+    )
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Follow(db.Model):
+    __tablename__ = 'follow'
+
+    follower_id = db.Column(
+        db.Integer,
+        db.ForeignKey('userdetails.id'),
+        primary_key=True
+    )
+    following_id = db.Column(
+        db.Integer,
+        db.ForeignKey('userdetails.id'),
+        primary_key=True
+    )
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Report(db.Model):
+    __tablename__ = 'report'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    reporter_id = db.Column(
+        db.Integer,
+        db.ForeignKey('userdetails.id'),
+        nullable=False
+    )
+    post_id = db.Column(
+        db.Integer,
+        db.ForeignKey('post.id'),
+        nullable=False
+    )
+
+    reason = db.Column(db.String(50), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
 with app.app_context():
     # Match.__table__.drop(db.engine)
     # UserPreference.__table__.drop(db.engine)
@@ -237,8 +348,85 @@ with app.app_context():
 
 # API Endpoints
 
+def get_comments(post_id):
+    return Post.query.filter_by(parent_id=post_id).order_by(Post.created_at).all()
+
+
+@app.route('/posts', methods=['POST'])
+def create_post():
+    data = request.json
+
+    post = Post(
+        author_id=data['author_id'],
+        text=data['text'],
+        post_type=data.get('post_type', 'text'),
+        media_url=data.get('media_url'),
+        parent_id=data.get('parent_id')
+    )
+
+    db.session.add(post)
+    db.session.commit()
+    return {"id": post.id}, 201
+
+
+@app.route('/posts/<int:post_id>/like', methods=['POST'])
+def like_post(post_id):
+    user_id = request.json['user_id']
+
+    like = Like.query.get((user_id, post_id))
+    if like:
+        db.session.delete(like)
+    else:
+        db.session.add(Like(user_id=user_id, post_id=post_id))
+
+    db.session.commit()
+    return {"status": "ok"}
+
+
+@app.route('/follow', methods=['POST'])
+def follow_user():
+    data = request.json
+
+    follow = Follow(
+        follower_id=data['follower_id'],
+        following_id=data['following_id']
+    )
+    db.session.add(follow)
+    db.session.commit()
+    return {"status": "ok"}
+
+
+@app.route('/feed/<int:user_id>')
+def feed(user_id):
+    followed = db.session.query(Follow.following_id)\
+        .filter(Follow.follower_id == user_id)
+
+    posts = Post.query.filter(
+        Post.author_id.in_(followed),
+        Post.parent_id.is_(None)
+    ).order_by(Post.created_at.desc()).limit(50).all()
+
+    return [{"id": p.id, "text": p.text} for p in posts]
+
+
+@app.route('/report', methods=['POST'])
+def report_post():
+    data = request.json
+
+    report = Report(
+        reporter_id=data['reporter_id'],
+        post_id=data['post_id'],
+        reason=data['reason']
+    )
+    db.session.add(report)
+    db.session.commit()
+    return {"status": "reported"}
+
+
+
 def has_user_checked_in(user_id, location_id):
     return db.session.query(CheckIn).filter_by(user_id=user_id, location_id=location_id).first() is not None
+
 
 def create_token(user):
     payload = {
@@ -268,7 +456,6 @@ def get_current_user_from_token():
     except jwt.InvalidTokenError as e:
         print("JWT invalid:", e)
         return None
-
 
 
 @app.route('/sign-in', methods=['POST'])
