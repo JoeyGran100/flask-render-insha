@@ -243,19 +243,11 @@ class Post(db.Model):
     __tablename__ = 'post'
 
     id = db.Column(db.Integer, primary_key=True)
-
-    author_id = db.Column(
-        db.Integer,
-        db.ForeignKey('userdetails.id'),
-        nullable=False
-    )
-
+    author_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     text = db.Column(db.Text, nullable=False)
-
     post_type = db.Column(db.String(20))  # text, image, video
     media_url = db.Column(db.String(255), nullable=True)
 
-    # Threading (comments / replies)
     parent_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=True)
     replies = db.relationship(
         'Post',
@@ -263,20 +255,17 @@ class Post(db.Model):
         lazy=True
     )
 
-    created_at = db.Column(
-        db.DateTime,
-        default=datetime.utcnow,
-        nullable=False
-    )
-
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False)
 
-    # Hashtags relationship
     hashtags = db.relationship(
         'Hashtag',
         secondary='post_hashtag',
         backref='posts'
     )
+
+    # ✅ Add this for likes
+    likes = db.relationship('Like', backref='post', lazy=True)
 
 
 class Hashtag(db.Model):
@@ -413,7 +402,9 @@ def get_my_posts():
 
 
 def serialize_post(post: Post):
-    # Fetch the UserProfile for the post author
+    user = get_current_user_from_token()  # current logged-in user
+
+    # Fetch author profile
     profile = UserProfile.query.filter_by(user_auth_id=post.author_id).first()
     
     # Fetch the user's image (assuming one image per user)
@@ -421,13 +412,18 @@ def serialize_post(post: Post):
     
     # Count likes for this post
     like_count = Like.query.filter_by(post_id=post.id).count()
-    
+
+    # Check if current user liked the post
+    user_liked = False
+    if user:
+        user_liked = Like.query.filter_by(post_id=post.id, user_id=user.id).first() is not None
+
     return {
         "id": post.id,
         "author_id": post.author_id,
         "author_name": f"{profile.firstname} {profile.lastname}" if profile else None,
         "author_email": profile.email if profile else None,
-        "user_image": user_image.imageString if user_image else None,  # return the image string
+        "user_image": user_image.imageString if user_image else None,
         "text": post.text,
         "post_type": post.post_type,
         "media_url": post.media_url,
@@ -435,8 +431,10 @@ def serialize_post(post: Post):
         "created_at": post.created_at.isoformat(),
         "is_deleted": post.is_deleted,
         "hashtags": [tag.name for tag in post.hashtags],
-        "like_count": like_count
+        "like_count": like_count,
+        "user_liked": user_liked
     }
+
 
 
 @app.route("/like", methods=["POST"])
