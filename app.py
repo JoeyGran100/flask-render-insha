@@ -471,6 +471,45 @@ def create_like():
         "post_id": post_id,
         "created_at": new_like.created_at.isoformat()
     }), 201
+     
+    
+@app.route("/like", methods=["DELETE"])
+def delete_like():
+    # Get JWT token from Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Missing authorization"}), 401
+
+    token = auth_header.split(" ")[1]  # Bearer <token>
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user_id = payload.get("user_id")  # user_id from token
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
+
+    # Get post_id from request body
+    data = request.json
+    post_id = data.get("post_id")
+    if not post_id:
+        return jsonify({"error": "post_id is required"}), 400
+
+    # Find the like
+    existing_like = Like.query.filter_by(user_id=user_id, post_id=post_id).first()
+    if not existing_like:
+        return jsonify({"message": "Like does not exist"}), 404
+
+    # Delete the like
+    db.session.delete(existing_like)
+    db.session.commit()
+
+    return jsonify({
+        "user_id": user_id,
+        "post_id": post_id,
+        "message": "Like removed"
+    }), 200
+
 
 
 @app.route('/follow', methods=['POST'])
