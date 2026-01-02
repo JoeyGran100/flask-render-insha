@@ -369,18 +369,24 @@ def create_post():
     return {"id": post.id}, 201
 
 
-@app.route('/posts/user/<int:user_id>', methods=['GET'])
-def get_posts_by_user(user_id):
+@app.route('/posts/feed', methods=['GET'])
+def get_all_posts():
+    user = get_current_user_from_token()
+
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+
     posts = (
         Post.query
-        .filter_by(author_id=user_id, is_deleted=False)
+        .filter_by(is_deleted=False)
         .order_by(Post.created_at.desc())
         .all()
     )
 
-    return {
+    return jsonify({
         "posts": [serialize_post(post) for post in posts]
-    }, 200
+    }), 200
+
 
 
 def serialize_post(post: Post):
