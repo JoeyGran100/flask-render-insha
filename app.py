@@ -392,19 +392,27 @@ def get_all_posts():
 def serialize_post(post: Post):
     # Fetch the UserProfile for the post author
     profile = UserProfile.query.filter_by(user_auth_id=post.author_id).first()
-
+    
+    # Fetch the user's image (assuming one image per user)
+    user_image = UserImages.query.filter_by(user_auth_id=post.author_id).first()
+    
+    # Count likes for this post
+    like_count = Like.query.filter_by(post_id=post.id).count()
+    
     return {
         "id": post.id,
         "author_id": post.author_id,
         "author_name": f"{profile.firstname} {profile.lastname}" if profile else None,
         "author_email": profile.email if profile else None,
+        "user_image": user_image.imageString if user_image else None,  # return the image string
         "text": post.text,
         "post_type": post.post_type,
         "media_url": post.media_url,
         "parent_id": post.parent_id,
         "created_at": post.created_at.isoformat(),
         "is_deleted": post.is_deleted,
-        "hashtags": [tag.name for tag in post.hashtags]
+        "hashtags": [tag.name for tag in post.hashtags],
+        "like_count": like_count
     }
 
 
