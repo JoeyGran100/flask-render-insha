@@ -473,30 +473,33 @@ def create_like():
     }), 201
      
     
-@app.route("/like", methods=["DELETE"])
-def delete_like():
+@app.route("/like/<int:post_id>", methods=["DELETE"])
+def delete_like(post_id):
     # Get JWT token from Authorization header
     auth_header = request.headers.get("Authorization")
     if not auth_header:
         return jsonify({"error": "Missing authorization"}), 401
 
-    token = auth_header.split(" ")[1]  # Bearer <token>
+    parts = auth_header.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return jsonify({"error": "Invalid authorization header"}), 401
+
+    token = parts[1]
+
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id = payload.get("user_id")  # user_id from token
+        user_id = payload.get("user_id")
     except jwt.ExpiredSignatureError:
         return jsonify({"error": "Token expired"}), 401
     except jwt.InvalidTokenError:
         return jsonify({"error": "Invalid token"}), 401
 
-    # Get post_id from request body
-    data = request.json
-    post_id = data.get("post_id")
-    if not post_id:
-        return jsonify({"error": "post_id is required"}), 400
-
     # Find the like
-    existing_like = Like.query.filter_by(user_id=user_id, post_id=post_id).first()
+    existing_like = Like.query.filter_by(
+        user_id=user_id,
+        post_id=post_id
+    ).first()
+
     if not existing_like:
         return jsonify({"message": "Like does not exist"}), 404
 
@@ -509,7 +512,6 @@ def delete_like():
         "post_id": post_id,
         "message": "Like removed"
     }), 200
-
 
 
 @app.route('/follow', methods=['POST'])
