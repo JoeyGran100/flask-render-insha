@@ -290,6 +290,10 @@ class Like(db.Model):
     )
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "post_id", name="unique_user_post_like"),
+    )
+
 
 class Follow(db.Model):
     __tablename__ = 'follow'
@@ -443,28 +447,22 @@ def create_like():
     if not auth_header:
         return jsonify({"error": "Missing authorization"}), 401
 
-    token = auth_header.split(" ")[1]  # Bearer <token>
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id = payload.get("user_id")  # user_id from token
-    except jwt.ExpiredSignatureError:
-        return jsonify({"error": "Token expired"}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Invalid token"}), 401
+    token = auth_header.split(" ")[1]
+    payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    user_id = payload.get("user_id")
 
     data = request.json
     post_id = data.get("post_id")
     if not post_id:
         return jsonify({"error": "post_id is required"}), 400
 
-    # Check if like already exists
-    existing_like = Like.query.filter_by(user_id=user_id, post_id=post_id).first()
-    if existing_like:
+    try:
+        new_like = Like(user_id=user_id, post_id=post_id)
+        db.session.add(new_like)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
         return jsonify({"message": "Post already liked"}), 200
-
-    new_like = Like(user_id=user_id, post_id=post_id)
-    db.session.add(new_like)
-    db.session.commit()
 
     return jsonify({
         "user_id": user_id,
