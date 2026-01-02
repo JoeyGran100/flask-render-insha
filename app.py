@@ -368,7 +368,7 @@ def create_post():
     db.session.commit()
     return {"id": post.id}, 201
 
-
+# Get all users posts in the app feed
 @app.route('/posts/feed', methods=['GET'])
 def get_all_posts():
     user = get_current_user_from_token()
@@ -383,6 +383,29 @@ def get_all_posts():
         .all()
     )
 
+    return jsonify({
+        "posts": [serialize_post(post) for post in posts]
+    }), 200
+
+
+# Get only the logged-in user's posts
+@app.route('/posts/my_posts', methods=['GET'])
+def get_my_posts():
+    # Get the currently logged-in user from the token
+    user = get_current_user_from_token()
+
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    # Fetch only posts authored by this user
+    posts = (
+        Post.query
+        .filter_by(author_id=user.id, is_deleted=False)
+        .order_by(Post.created_at.desc())
+        .all()
+    )
+
+    # Serialize posts
     return jsonify({
         "posts": [serialize_post(post) for post in posts]
     }), 200
