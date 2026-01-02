@@ -416,18 +416,40 @@ def serialize_post(post: Post):
     }
 
 
-@app.route('/posts/<int:post_id>/like', methods=['POST'])
-def like_post(post_id):
-    user_id = request.json['user_id']
+@app.route("/like", methods=["POST"])
+def create_like():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Missing authorization"}), 401
 
-    like = Like.query.get((user_id, post_id))
-    if like:
-        db.session.delete(like)
-    else:
-        db.session.add(Like(user_id=user_id, post_id=post_id))
+    token = auth_header.split(" ")[1]  # Bearer <token>
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        user_id = payload.get("user_id")  # user_id from token
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
 
+    data = request.json
+    post_id = data.get("post_id")
+    if not post_id:
+        return jsonify({"error": "post_id is required"}), 400
+
+    # Check if like already exists
+    existing_like = Like.query.filter_by(user_id=user_id, post_id=post_id).first()
+    if existing_like:
+        return jsonify({"message": "Post already liked"}), 200
+
+    new_like = Like(user_id=user_id, post_id=post_id)
+    db.session.add(new_like)
     db.session.commit()
-    return {"status": "ok"}
+
+    return jsonify({
+        "user_id": user_id,
+        "post_id": post_id,
+        "created_at": new_like.created_at.isoformat()
+    }), 201
 
 
 @app.route('/follow', methods=['POST'])
