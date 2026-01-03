@@ -344,6 +344,7 @@ with app.app_context():
 def get_comments(post_id):
     return Post.query.filter_by(parent_id=post_id).order_by(Post.created_at).all()
 
+# MAKE SOCIAL MEDIA POSTS -> Start
 
 @app.route('/posts', methods=['POST'])
 def create_post():
@@ -404,7 +405,6 @@ def get_my_posts():
     }), 200
 
 
-
 def serialize_post(post: Post):
     user = get_current_user_from_token()  # current logged-in user
 
@@ -439,7 +439,9 @@ def serialize_post(post: Post):
         "user_liked": user_liked
     }
 
+# MAKE SOCIAL MEDIA POSTS -> END
 
+# LIKE POSTS -> Start
 
 @app.route("/like", methods=["POST"])
 def create_like():
@@ -512,6 +514,8 @@ def delete_like(post_id):
     }), 200
 
 
+# LIKE POSTS -> END
+
 @app.route('/follow', methods=['POST'])
 def follow_user():
     data = request.json
@@ -550,7 +554,6 @@ def report_post():
     db.session.add(report)
     db.session.commit()
     return {"status": "reported"}
-
 
 
 def has_user_checked_in(user_id, location_id):
