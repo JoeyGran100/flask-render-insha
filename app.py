@@ -521,8 +521,8 @@ def follow_user():
 
     
     
-@app.route('/unfollow', methods=['DELETE'])
-def unfollow_user():
+@app.route('/unfollow/<int:following_id>', methods=['DELETE'])
+def unfollow_user(following_id):
     auth_header = request.headers.get("Authorization")
     if not auth_header:
         return jsonify({"error": "Missing authorization"}), 401
@@ -534,12 +534,7 @@ def unfollow_user():
     except Exception:
         return jsonify({"error": "Invalid token"}), 401
 
-    data = request.json
-    following_id = data.get("following_id")
-    if not following_id:
-        return jsonify({"error": "following_id is required"}), 400
-
-    # ✅ ADD SELF-CHECK HERE
+    # ✅ Self-check
     if follower_id == following_id:
         return jsonify({"error": "You cannot unfollow yourself"}), 400
 
