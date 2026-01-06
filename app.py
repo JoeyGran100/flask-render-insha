@@ -314,19 +314,32 @@ def get_comments(post_id):
 
 @app.route('/posts', methods=['POST'])
 def create_post():
-    data = request.json
+    # Get auth token
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Missing authorization"}), 401
 
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        author_id = payload.get("user_id")
+    except Exception as e:
+        return jsonify({"error": "Invalid token"}), 401
+
+    # Get post data from frontend
+    data = request.json
     post = Post(
-        author_id=data['author_id'],
+        author_id=author_id,  # ✅ from token, not frontend
         text=data['text'],
         post_type=data.get('post_type', 'text'),
         media_url=data.get('media_url'),
-        parent_id=data.get('parent_id')
+        parent_id=data.get('parent_id')  # optional, for replies
     )
 
     db.session.add(post)
     db.session.commit()
     return {"id": post.id}, 201
+
 
 # Get all users posts in the app feed
 @app.route('/posts/feed', methods=['GET'])
