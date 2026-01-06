@@ -516,6 +516,8 @@ def delete_like(post_id):
 
 # LIKE POSTS -> END
 
+# FOLLOW USERS -> START
+
 @app.route('/follow', methods=['POST'])
 def follow_user():
     auth_header = request.headers.get("Authorization")
@@ -546,6 +548,44 @@ def follow_user():
         "follower_id": follower_id,
         "following_id": following_id
     }), 201
+    
+    
+@app.route('/unfollow', methods=['DELETE'])
+def unfollow_user():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Missing authorization"}), 401
+
+    try:
+        token = auth_header.split(" ")[1]
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        follower_id = payload.get("user_id")
+    except Exception:
+        return jsonify({"error": "Invalid token"}), 401
+
+    data = request.json
+    following_id = data.get("following_id")
+    if not following_id:
+        return jsonify({"error": "following_id is required"}), 400
+
+    follow = Follow.query.filter_by(
+        follower_id=follower_id,
+        following_id=following_id
+    ).first()
+
+    if not follow:
+        return jsonify({"message": "Not following"}), 200
+
+    db.session.delete(follow)
+    db.session.commit()
+
+    return jsonify({
+        "follower_id": follower_id,
+        "following_id": following_id,
+        "message": "Unfollowed successfully"
+    }), 200
+
+# FOLLOW USERS -> END
 
 
 @app.route('/feed/<int:user_id>')
