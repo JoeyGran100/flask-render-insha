@@ -499,6 +499,10 @@ def follow_user():
     if not following_id:
         return jsonify({"error": "following_id is required"}), 400
 
+    # ✅ ADD SELF-FOLLOW CHECK HERE
+    if follower_id == following_id:
+        return jsonify({"error": "You cannot follow yourself"}), 400
+
     try:
         follow = Follow(
             follower_id=follower_id,
@@ -514,6 +518,7 @@ def follow_user():
         "follower_id": follower_id,
         "following_id": following_id
     }), 201
+
     
     
 @app.route('/unfollow', methods=['DELETE'])
@@ -534,6 +539,10 @@ def unfollow_user():
     if not following_id:
         return jsonify({"error": "following_id is required"}), 400
 
+    # ✅ ADD SELF-CHECK HERE
+    if follower_id == following_id:
+        return jsonify({"error": "You cannot unfollow yourself"}), 400
+
     follow = Follow.query.filter_by(
         follower_id=follower_id,
         following_id=following_id
@@ -550,6 +559,7 @@ def unfollow_user():
         "following_id": following_id,
         "message": "Unfollowed successfully"
     }), 200
+
 
 # FOLLOW USERS -> END
 
