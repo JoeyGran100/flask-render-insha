@@ -11,8 +11,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import or_, and_, desc
 from flask import request, jsonify
 import traceback
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import SQLAlchemyError, CheckConstraint, IntegrityError
 import jwt
 import logging
 
@@ -247,22 +246,11 @@ class Post(db.Model):
     text = db.Column(db.Text, nullable=False)
     post_type = db.Column(db.String(20))  # text, image, video
     media_url = db.Column(db.String(255), nullable=True)
-
     parent_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=True)
-    replies = db.relationship(
-        'Post',
-        backref=db.backref('parent', remote_side=[id]),
-        lazy=True
-    )
-
+    replies = db.relationship('Post',backref=db.backref('parent', remote_side=[id]),lazy=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False)
-
-    hashtags = db.relationship(
-        'Hashtag',
-        secondary='post_hashtag',
-        backref='posts'
-    )
+    hashtags = db.relationship('Hashtag',secondary='post_hashtag',backref='posts')
 
     # ✅ Add this for likes
     likes = db.relationship('Like', backref='post', lazy=True)
@@ -278,16 +266,8 @@ class Hashtag(db.Model):
 class Like(db.Model):
     __tablename__ = 'like'
 
-    user_id = db.Column(
-        db.Integer,
-        db.ForeignKey('userdetails.id'),
-        primary_key=True
-    )
-    post_id = db.Column(
-        db.Integer,
-        db.ForeignKey('post.id'),
-        primary_key=True
-    )
+    user_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),primary_key=True)
+    post_id = db.Column(db.Integer,db.ForeignKey('post.id'),primary_key=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (
@@ -298,35 +278,21 @@ class Like(db.Model):
 class Follow(db.Model):
     __tablename__ = 'follow'
 
-    follower_id = db.Column(
-        db.Integer,
-        db.ForeignKey('userdetails.id'),
-        primary_key=True
+    follower_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),primary_key=True)
+    following_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),primary_key=True)
+    created_at = db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
+
+    __table_args__ = (
+        CheckConstraint('follower_id != following_id', name='no_self_follow'),
     )
-    following_id = db.Column(
-        db.Integer,
-        db.ForeignKey('userdetails.id'),
-        primary_key=True
-    )
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
 class Report(db.Model):
     __tablename__ = 'report'
 
     id = db.Column(db.Integer, primary_key=True)
-
-    reporter_id = db.Column(
-        db.Integer,
-        db.ForeignKey('userdetails.id'),
-        nullable=False
-    )
-    post_id = db.Column(
-        db.Integer,
-        db.ForeignKey('post.id'),
-        nullable=False
-    )
-
+    reporter_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),nullable=False)
+    post_id = db.Column(db.Integer,db.ForeignKey('post.id'),nullable=False)
     reason = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
