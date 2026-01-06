@@ -8,10 +8,10 @@ from flask_socketio import SocketIO, join_room, send, emit
 import os
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
-from sqlalchemy import or_, and_, desc
+from sqlalchemy import or_, and_, desc, CheckConstraint
 from flask import request, jsonify
 import traceback
-from sqlalchemy.exc import SQLAlchemyError, CheckConstraint, IntegrityError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import jwt
 import logging
 
