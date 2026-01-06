@@ -518,15 +518,34 @@ def delete_like(post_id):
 
 @app.route('/follow', methods=['POST'])
 def follow_user():
-    data = request.json
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Missing authorization"}), 401
 
-    follow = Follow(
-        follower_id=data['follower_id'],
-        following_id=data['following_id']
-    )
-    db.session.add(follow)
-    db.session.commit()
-    return {"status": "ok"}
+    token = auth_header.split(" ")[1]
+    payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    follower_id = payload.get("user_id")
+
+    data = request.json
+    following_id = data.get("following_id")
+    if not following_id:
+        return jsonify({"error": "following_id is required"}), 400
+
+    try:
+        follow = Follow(
+            follower_id=follower_id,
+            following_id=following_id
+        )
+        db.session.add(follow)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"message": "Already following"}), 200
+
+    return jsonify({
+        "follower_id": follower_id,
+        "following_id": following_id
+    }), 201
 
 
 @app.route('/feed/<int:user_id>')
