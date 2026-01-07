@@ -623,7 +623,7 @@ def report_post():
         return jsonify({"error": "post_id and reason are required"}), 400
 
     # ✅ Check if post exists
-    post = Post.query.get(post_id)
+    post = db.session.get(Post, post_id)
     if not post:
         return jsonify({"error": f"Post with id {post_id} not found"}), 404
 
