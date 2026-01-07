@@ -352,7 +352,6 @@ def create_post():
 }), 201
 
 
-
 # Get all users posts in the app feed
 @app.route('/posts/feed', methods=['GET'])
 def get_all_posts():
@@ -545,7 +544,6 @@ def follow_user():
     }), 201
 
     
-    
 @app.route('/unfollow/<int:following_id>', methods=['DELETE'])
 def unfollow_user(following_id):
     auth_header = request.headers.get("Authorization")
@@ -597,19 +595,60 @@ def feed(user_id):
     return [{"id": p.id, "text": p.text} for p in posts]
 
 
+# REPORT USERS -> START
+
 @app.route('/report', methods=['POST'])
 def report_post():
+    # 1️⃣ Check for Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Missing authorization"}), 401
+
+    # 2️⃣ Extract token
+    token = auth_header.split(" ")[1]
+
+    # 3️⃣ Decode JWT
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
+
+    reporter_id = payload.get("user_id")
+    if not reporter_id:
+        return jsonify({"error": "Invalid token payload"}), 401
+
+    # 4️⃣ Parse request data
     data = request.json
+    post_id = data.get("post_id")
+    reason = data.get("reason")
 
-    report = Report(
-        reporter_id=data['reporter_id'],
-        post_id=data['post_id'],
-        reason=data['reason']
-    )
-    db.session.add(report)
-    db.session.commit()
-    return {"status": "reported"}
+    if not post_id or not reason:
+        return jsonify({"error": "post_id and reason are required"}), 400
 
+    # 5️⃣ Save report in DB
+    try:
+        report = Report(
+            reporter_id=reporter_id,  # ✅ take ID from token
+            post_id=post_id,
+            reason=reason
+        )
+        db.session.add(report)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    # 6️⃣ Return success
+    return jsonify({
+        "status": "reported",
+        "reporter_id": reporter_id,
+        "post_id": post_id
+    }), 201
+
+
+# REPORT USERS -> END
 
 def has_user_checked_in(user_id, location_id):
     return db.session.query(CheckIn).filter_by(user_id=user_id, location_id=location_id).first() is not None
