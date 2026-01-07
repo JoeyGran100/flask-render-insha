@@ -599,15 +599,11 @@ def feed(user_id):
 
 @app.route('/report', methods=['POST'])
 def report_post():
-    # 1️⃣ Check for Authorization header
     auth_header = request.headers.get("Authorization")
     if not auth_header:
         return jsonify({"error": "Missing authorization"}), 401
 
-    # 2️⃣ Extract token
     token = auth_header.split(" ")[1]
-
-    # 3️⃣ Decode JWT
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
@@ -619,7 +615,6 @@ def report_post():
     if not reporter_id:
         return jsonify({"error": "Invalid token payload"}), 401
 
-    # 4️⃣ Parse request data
     data = request.json
     post_id = data.get("post_id")
     reason = data.get("reason")
@@ -627,10 +622,14 @@ def report_post():
     if not post_id or not reason:
         return jsonify({"error": "post_id and reason are required"}), 400
 
-    # 5️⃣ Save report in DB
+    # ✅ Check if post exists
+    post = Post.query.get(post_id)
+    if not post:
+        return jsonify({"error": f"Post with id {post_id} not found"}), 404
+
     try:
         report = Report(
-            reporter_id=reporter_id,  # ✅ take ID from token
+            reporter_id=reporter_id,
             post_id=post_id,
             reason=reason
         )
@@ -639,11 +638,9 @@ def report_post():
     except Exception as e:
         db.session.rollback()
         import traceback
-        print(traceback.format_exc())  # 👈 prints full error to console
+        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 500
 
-
-    # 6️⃣ Return success
     return jsonify({
         "status": "reported",
         "reporter_id": reporter_id,
