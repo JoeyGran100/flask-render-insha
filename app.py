@@ -638,7 +638,10 @@ def report_post():
         db.session.commit()
     except Exception as e:
         db.session.rollback()
+        import traceback
+        print(traceback.format_exc())  # 👈 prints full error to console
         return jsonify({"error": str(e)}), 500
+
 
     # 6️⃣ Return success
     return jsonify({
