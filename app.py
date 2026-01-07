@@ -338,7 +338,19 @@ def create_post():
 
     db.session.add(post)
     db.session.commit()
-    return {"id": post.id}, 201
+    
+    return jsonify({
+    "id": post.id,
+    "text": post.text,
+    "post_type": post.post_type,
+    "media_url": post.media_url,
+    "parent_id": post.parent_id,
+    "created_at": post.created_at.isoformat(),
+    "is_deleted": False,
+    "hashtags": [],
+    "isFollowing": False
+}), 201
+
 
 
 # Get all users posts in the app feed
