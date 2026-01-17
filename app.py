@@ -355,9 +355,9 @@ def create_post():
 # Get all users posts in the app feed
 @app.route('/posts/feed', methods=['GET'])
 def get_all_posts():
-    user = get_current_user_from_token()
+    current_user = get_current_user_from_token()
 
-    if not user:
+    if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
     posts = (
@@ -368,7 +368,10 @@ def get_all_posts():
     )
 
     return jsonify({
-        "posts": [serialize_post(post) for post in posts]
+        "posts": [
+            serialize_post(post, current_user)
+            for post in posts
+        ]
     }), 200
 
 
@@ -395,27 +398,38 @@ def get_my_posts():
     }), 200
 
 
-def serialize_post(post: Post):
-    user = get_current_user_from_token()  # current logged-in user
-
+def serialize_post(post: Post, current_user=None):
     # Fetch author profile
-    profile = UserProfile.query.filter_by(user_auth_id=post.author_id).first()
-    
-    # Fetch the user's image (assuming one image per user)
-    user_image = UserImages.query.filter_by(user_auth_id=post.author_id).first()
-    
-    # Count likes for this post
+    profile = UserProfile.query.filter_by(
+        user_auth_id=post.author_id
+    ).first()
+
+    # Fetch author image
+    user_image = UserImages.query.filter_by(
+        user_auth_id=post.author_id
+    ).first()
+
+    # Count likes
     like_count = Like.query.filter_by(post_id=post.id).count()
 
-    # Check if current user liked the post
+    # Did current user like this post?
     user_liked = False
-    if user:
-        user_liked = Like.query.filter_by(post_id=post.id, user_id=user.id).first() is not None
+    if current_user:
+        user_liked = (
+            Like.query.filter_by(
+                post_id=post.id,
+                user_id=current_user.id
+            ).first()
+            is not None
+        )
 
     return {
         "id": post.id,
         "author_id": post.author_id,
-        "author_name": f"{profile.firstname} {profile.lastname}" if profile else None,
+        "author_name": (
+            f"{profile.firstname} {profile.lastname}"
+            if profile else None
+        ),
         "author_email": profile.email if profile else None,
         "user_image": user_image.imageString if user_image else None,
         "text": post.text,
@@ -428,6 +442,7 @@ def serialize_post(post: Post):
         "like_count": like_count,
         "user_liked": user_liked
     }
+
 
 # MAKE SOCIAL MEDIA POSTS -> END
 
