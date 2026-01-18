@@ -296,6 +296,12 @@ class Report(db.Model):
     reason = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
+# 1️⃣ Association table MUST come first
+group_members = db.Table(
+    'group_members',
+    db.Column('group_id', db.Integer, db.ForeignKey('groups.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('userdetails.id'), primary_key=True)
+)
 
 class Groups(db.Model):
     __tablename__ = 'groups'
