@@ -557,45 +557,45 @@ def create_group():
 
 @app.route('/groups', methods=['GET'])
 def get_all_groups():
-    logger.info("GET /groups called")  # Log entry
+    logger.info("GET /groups called")
 
     try:
         groups = Groups.query.order_by(Groups.created_at.desc()).all()
         logger.info(f"Fetched {len(groups)} groups from DB")
 
         results = []
+
         for group in groups:
-            logger.info(f"Processing group ID: {group.id}, Name: {group.name}")
+            logger.info(f"Processing group ID={group.id}, name={group.name}")
 
-            try:
-                top_post = group.top_post
-                group_data = {
-                    "id": group.id,
-                    "name": group.name,
-                    "description": group.description,
-                    "image_url": group.image_url,
-                    "creator": {
-                        "id": group.creator.id,
-                        "email": group.creator.email
-                    },
-                    "members_count": group.members_count,
-                    "top_post": {
-                        "id": top_post.id,
-                        "text": top_post.text,
-                        "likes": len(top_post.likes)
-                    } if top_post else None,
-                    "created_at": group.created_at.isoformat()
-                }
-                results.append(group_data)
+            # ✅ Safely compute top post
+            top_post = None
+            if group.posts:
+                top_post = max(group.posts, key=lambda p: len(p.likes))
 
-            except Exception as e:
-                logger.error(f"Error processing group ID {group.id}: {e}", exc_info=True)
+            results.append({
+                "id": group.id,
+                "name": group.name,
+                "description": group.description,
+                "image_url": group.image_url,
+                "creator": {
+                    "id": group.creator.id,
+                    "email": group.creator.email
+                },
+                "members_count": group.members_count,
+                "top_post": {
+                    "id": top_post.id,
+                    "text": top_post.text,
+                    "likes": len(top_post.likes)
+                } if top_post else None,
+                "created_at": group.created_at.isoformat()
+            })
 
-        logger.info("Returning all groups")
+        logger.info("Returning groups successfully")
         return jsonify(results), 200
 
     except Exception as e:
-        logger.error("Failed to fetch groups from DB", exc_info=True)
+        logger.error("Fatal error in GET /groups", exc_info=True)
         return jsonify({"error": "internal_server_error"}), 500
 
 
