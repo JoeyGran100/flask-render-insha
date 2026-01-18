@@ -15,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import jwt
 import logging
 
+
 app = Flask(__name__)
 app.config[
     'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp6_render_example_user:I4BiP4Qsbp1FzGcBPTA8yw8uMkiTG6d3@dpg-d5mbuj63jp1c73a0j5r0-a.frankfurt-postgres.render.com/inshaapp6_render_example"
@@ -30,6 +31,10 @@ logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(message)s"
 )
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)  # Logs INFO and above
+logger = logging.getLogger(__name__)
 
 # Ensure the uploads folder exists
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
@@ -552,31 +557,46 @@ def create_group():
 
 @app.route('/groups', methods=['GET'])
 def get_all_groups():
-    groups = Groups.query.order_by(Groups.created_at.desc()).all()
+    logger.info("GET /groups called")  # Log entry
 
-    results = []
-    for group in groups:
-        top_post = group.top_post
+    try:
+        groups = Groups.query.order_by(Groups.created_at.desc()).all()
+        logger.info(f"Fetched {len(groups)} groups from DB")
 
-        results.append({
-            "id": group.id,
-            "name": group.name,
-            "description": group.description,
-            "image_url": group.image_url,
-            "creator": {
-                "id": group.creator.id,
-                "email": group.creator.email
-            },
-            "members_count": group.members_count,
-            "top_post": {
-                "id": top_post.id,
-                "text": top_post.text,
-                "likes": len(top_post.likes)
-            } if top_post else None,
-            "created_at": group.created_at.isoformat()
-        })
+        results = []
+        for group in groups:
+            logger.info(f"Processing group ID: {group.id}, Name: {group.name}")
 
-    return jsonify(results), 200
+            try:
+                top_post = group.top_post
+                group_data = {
+                    "id": group.id,
+                    "name": group.name,
+                    "description": group.description,
+                    "image_url": group.image_url,
+                    "creator": {
+                        "id": group.creator.id,
+                        "email": group.creator.email
+                    },
+                    "members_count": group.members_count,
+                    "top_post": {
+                        "id": top_post.id,
+                        "text": top_post.text,
+                        "likes": len(top_post.likes)
+                    } if top_post else None,
+                    "created_at": group.created_at.isoformat()
+                }
+                results.append(group_data)
+
+            except Exception as e:
+                logger.error(f"Error processing group ID {group.id}: {e}", exc_info=True)
+
+        logger.info("Returning all groups")
+        return jsonify(results), 200
+
+    except Exception as e:
+        logger.error("Failed to fetch groups from DB", exc_info=True)
+        return jsonify({"error": "internal_server_error"}), 500
 
 
 # CREATE A GROUP -> END
