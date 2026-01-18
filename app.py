@@ -273,7 +273,7 @@ class Like(db.Model):
     __table_args__ = (
         db.UniqueConstraint("user_id", "post_id", name="unique_user_post_like"),
     )
-
+    
 
 class Follow(db.Model):
     __tablename__ = 'follow'
@@ -295,6 +295,30 @@ class Report(db.Model):
     post_id = db.Column(db.Integer,db.ForeignKey('post.id'),nullable=False)
     reason = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Groups(db.Model):
+    __tablename__ = 'groups'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text)
+    image_url = db.Column(db.String(255))
+
+    creator_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),nullable=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationships
+    creator = db.relationship('User', backref='created_groups')
+    members = db.relationship('User',secondary='group_members',backref='groups')
+
+    posts = db.relationship('Post', backref='group', lazy=True)
+
+    @property
+    def members_count(self):
+        return len(self.members)
+
 
 
 with app.app_context():
@@ -445,6 +469,104 @@ def serialize_post(post: Post, current_user=None):
 
 
 # MAKE SOCIAL MEDIA POSTS -> END
+
+# CREATE A GROUP -> START
+
+@app.route('/groups', methods=['POST'])
+def create_group():
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Missing authorization"}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
+
+    user_id = payload.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Invalid token payload"}), 401
+
+    data = request.json
+    name = data.get("name")
+    description = data.get("description")
+    image_url = data.get("image_url")
+
+    if not name:
+        return jsonify({"error": "Group name is required"}), 400
+
+    # ❌ Prevent duplicate group names
+    if Groups.query.filter_by(name=name).first():
+        return jsonify({"error": "Group name already exists"}), 409
+
+    try:
+        group = Groups(
+            name=name,
+            description=description,
+            image_url=image_url,
+            creator_id=user_id
+        )
+
+        # ✅ Add creator as first member
+        creator = db.session.get(User, user_id)
+        group.members.append(creator)
+
+        db.session.add(group)
+        db.session.commit()
+
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        print(traceback.format_exc())
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({
+        "status": "group_created",
+        "group": {
+            "id": group.id,
+            "name": group.name,
+            "description": group.description,
+            "image_url": group.image_url,
+            "creator_id": group.creator_id,
+            "members_count": group.members_count,
+            "created_at": group.created_at.isoformat()
+        }
+    }), 201
+
+
+@app.route('/groups', methods=['GET'])
+def get_all_groups():
+    groups = Groups.query.order_by(Groups.created_at.desc()).all()
+
+    results = []
+    for group in groups:
+        top_post = group.top_post
+
+        results.append({
+            "id": group.id,
+            "name": group.name,
+            "description": group.description,
+            "image_url": group.image_url,
+            "creator": {
+                "id": group.creator.id,
+                "email": group.creator.email
+            },
+            "members_count": group.members_count,
+            "top_post": {
+                "id": top_post.id,
+                "text": top_post.text,
+                "likes": len(top_post.likes)
+            } if top_post else None,
+            "created_at": group.created_at.isoformat()
+        })
+
+    return jsonify(results), 200
+
+
+# CREATE A GROUP -> END
 
 # LIKE POSTS -> Start
 
