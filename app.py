@@ -17,7 +17,7 @@ import logging
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp5_render_example_user:ro61BKATKbflbEsyeRHwCfQmZQTHgluM@dpg-d5mbcdpr0fns73erqvk0-a.frankfurt-postgres.render.com/inshaapp5_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp6_render_example_user:I4BiP4Qsbp1FzGcBPTA8yw8uMkiTG6d3@dpg-d5mbuj63jp1c73a0j5r0-a.frankfurt-postgres.render.com/inshaapp6_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -251,6 +251,7 @@ class Post(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False)
     hashtags = db.relationship('Hashtag',secondary='post_hashtag',backref='posts')
+    group_id = db.Column(db.Integer,db.ForeignKey('groups.id'),nullable=True)
 
     # ✅ Add this for likes
     likes = db.relationship('Like', backref='post', lazy=True)
@@ -311,20 +312,26 @@ class Groups(db.Model):
     description = db.Column(db.Text)
     image_url = db.Column(db.String(255))
 
-    creator_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),nullable=False)
+    creator_id = db.Column(
+        db.Integer,
+        db.ForeignKey('userdetails.id'),
+        nullable=False
+    )
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relationships
     creator = db.relationship('User', backref='created_groups')
-    members = db.relationship('User',secondary='group_members',backref='groups')
+    members = db.relationship(
+        'User',
+        secondary=group_members,   # ✅ FIX
+        backref='groups'
+    )
 
     posts = db.relationship('Post', backref='group', lazy=True)
 
     @property
     def members_count(self):
         return len(self.members)
-
 
 
 with app.app_context():
