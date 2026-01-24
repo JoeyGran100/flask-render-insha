@@ -639,6 +639,7 @@ def join_group(group_id):
     }), 200
 
 
+
 @app.route('/groups/<int:group_id>/leave', methods=['POST'])
 def leave_group(group_id):
     auth_header = request.headers.get("Authorization")
