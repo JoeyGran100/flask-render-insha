@@ -577,7 +577,7 @@ def get_all_groups():
                 "id": group.id,
                 "name": group.name,
                 "description": group.description,
-                "image_url": group.image_url,
+                "image_url": group.image_url,   
                 "creator": {
                     "id": group.creator.id,
                     "email": group.creator.email
@@ -597,6 +597,46 @@ def get_all_groups():
     except Exception as e:
         logger.error("Fatal error in GET /groups", exc_info=True)
         return jsonify({"error": "internal_server_error"}), 500
+
+
+@app.route('/groups/<int:group_id>/join', methods=['POST'])
+def join_group(group_id):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Missing authorization"}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
+
+    user_id = payload.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Invalid token payload"}), 401
+
+    group = db.session.get(Groups, group_id)
+    if not group:
+        return jsonify({"error": "Group not found"}), 404
+
+    user = db.session.get(User, user_id)
+    if user in group.members:
+        return jsonify({"error": "User already a member"}), 400
+
+    try:
+        group.members.append(user)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({
+        "status": "joined",
+        "group_id": group.id,
+        "members_count": group.members_count
+    }), 200
 
 
 # CREATE A GROUP -> END
