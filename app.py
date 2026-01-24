@@ -639,6 +639,50 @@ def join_group(group_id):
     }), 200
 
 
+@app.route('/groups/<int:group_id>/leave', methods=['POST'])
+def leave_group(group_id):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        return jsonify({"error": "Missing authorization"}), 401
+
+    token = auth_header.split(" ")[1]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    except jwt.ExpiredSignatureError:
+        return jsonify({"error": "Token expired"}), 401
+    except jwt.InvalidTokenError:
+        return jsonify({"error": "Invalid token"}), 401
+
+    user_id = payload.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Invalid token payload"}), 401
+
+    group = db.session.get(Groups, group_id)
+    if not group:
+        return jsonify({"error": "Group not found"}), 404
+
+    user = db.session.get(User, user_id)
+    if user not in group.members:
+        return jsonify({"error": "User is not a member of this group"}), 400
+
+    # Optional: prevent creator from leaving their own group
+    if group.creator_id == user_id:
+        return jsonify({"error": "Group creator cannot leave their own group"}), 400
+
+    try:
+        group.members.remove(user)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({
+        "status": "left",
+        "group_id": group.id,
+        "members_count": group.members_count
+    }), 200
+
+
 # CREATE A GROUP -> END
 
 # LIKE POSTS -> Start
