@@ -557,32 +557,34 @@ def create_group():
 
 @app.route('/groups', methods=['GET'])
 def get_all_groups():
-    logger.info("GET /groups called")
+    auth_header = request.headers.get("Authorization")
+    user_id = None
+    if auth_header:
+        token = auth_header.split(" ")[1]
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            user_id = payload.get("user_id")
+        except:
+            pass  # Ignore token errors for listing groups
 
     try:
         groups = Groups.query.order_by(Groups.created_at.desc()).all()
-        logger.info(f"Fetched {len(groups)} groups from DB")
-
         results = []
 
         for group in groups:
-            logger.info(f"Processing group ID={group.id}, name={group.name}")
-
-            # ✅ Safely compute top post
-            top_post = None
-            if group.posts:
-                top_post = max(group.posts, key=lambda p: len(p.likes))
+            top_post = max(group.posts, key=lambda p: len(p.likes)) if group.posts else None
 
             results.append({
                 "id": group.id,
                 "name": group.name,
                 "description": group.description,
-                "image_url": group.image_url,   
+                "image_url": group.image_url,
                 "creator": {
                     "id": group.creator.id,
                     "email": group.creator.email
                 },
                 "members_count": group.members_count,
+                "is_member": user_id in [u.id for u in group.members],  # ✅ Track membership
                 "top_post": {
                     "id": top_post.id,
                     "text": top_post.text,
@@ -591,7 +593,6 @@ def get_all_groups():
                 "created_at": group.created_at.isoformat()
             })
 
-        logger.info("Returning groups successfully")
         return jsonify(results), 200
 
     except Exception as e:
