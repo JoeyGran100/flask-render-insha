@@ -18,7 +18,7 @@ import logging
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp6_render_example_user:I4BiP4Qsbp1FzGcBPTA8yw8uMkiTG6d3@dpg-d5mbuj63jp1c73a0j5r0-a.frankfurt-postgres.render.com/inshaapp6_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp7_render_example_user:FoAICSU1aLfFHOC6wn9tDW6x96KGgv4V@dpg-d6cn0evfte5s73csopn0-a.frankfurt-postgres.render.com/inshaapp7_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
