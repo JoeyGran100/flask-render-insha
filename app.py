@@ -493,27 +493,126 @@ def get_post_comments(post_id):
     if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
-    # Ensure the parent post exists and is not deleted
-    parent_post = Post.query.filter_by(id=post_id, is_deleted=False).first()
-    if not parent_post:
-        return jsonify({"error": "Post not found"}), 404
+    limit = request.args.get('limit', 10, type=int)
+    cursor = request.args.get('cursor')  # ISO timestamp
 
-    # Fetch only comments (replies)
+    query = Post.query.filter(
+        Post.parent_id == post_id,
+        Post.is_deleted == False
+    )
+
+    if cursor:
+        query = query.filter(Post.created_at < cursor)
+
     comments = (
-        Post.query
-        .filter_by(parent_id=post_id, is_deleted=False)
-        .order_by(Post.created_at.asc())
+        query
+        .order_by(Post.created_at.desc())
+        .limit(limit + 1)
         .all()
     )
 
+    has_more = len(comments) > limit
+    comments = comments[:limit]
+
+    # Load all descendants for threading
+    all_comment_ids = [c.id for c in comments]
+    descendants = (
+        Post.query
+        .filter(Post.parent_id.in_(all_comment_ids))
+        .all()
+    )
+
+    all_comments = comments + descendants
+
+    # Build tree
+    comment_map = {}
+    roots = []
+
+    for c in all_comments:
+        comment_map[c.id] = {
+            **serialize_post(c, current_user),
+            "like_count": len(c.likes),
+            "liked_by_me": any(
+                l.user_id == current_user.id for l in c.likes
+            ),
+            "can_edit": c.author_id == current_user.id,
+            "can_delete": (
+                c.author_id == current_user.id or current_user.is_admin
+            ),
+            "replies": []
+        }
+
+    for c in all_comments:
+        if c.parent_id == post_id:
+            roots.append(comment_map[c.id])
+        elif c.parent_id in comment_map:
+            comment_map[c.parent_id]["replies"].append(comment_map[c.id])
+
+    next_cursor = comments[-1].created_at.isoformat() if comments else None
+
     return jsonify({
         "post_id": post_id,
-        "comment_count": len(comments),
-        "comments": [
-            serialize_post(comment, current_user)
-            for comment in comments
-        ]
+        "comments": roots,
+        "next_cursor": next_cursor,
+        "has_more": has_more
     }), 200
+    
+    
+@app.route('/posts/<int:comment_id>', methods=['PUT'])
+def edit_comment(comment_id):
+    current_user = get_current_user_from_token()
+    comment = Post.query.get_or_404(comment_id)
+
+    if comment.author_id != current_user.id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    data = request.json
+    comment.text = data.get("text", comment.text)
+    db.session.commit()
+
+    return jsonify(serialize_post(comment, current_user)), 200
+
+
+@app.route('/posts/<int:comment_id>', methods=['DELETE'])
+def delete_comment(comment_id):
+    current_user = get_current_user_from_token()
+    comment = Post.query.get_or_404(comment_id)
+
+    if not (
+        comment.author_id == current_user.id or current_user.is_admin
+    ):
+        return jsonify({"error": "Forbidden"}), 403
+
+    comment.is_deleted = True
+    db.session.commit()
+
+    return jsonify({"success": True}), 200
+
+
+@app.route('/posts/<int:post_id>/like', methods=['POST'])
+def toggle_like(post_id):
+    current_user = get_current_user_from_token()
+
+    like = Like.query.filter_by(
+        user_id=current_user.id,
+        post_id=post_id
+    ).first()
+
+    if like:
+        db.session.delete(like)
+        db.session.commit()
+        return jsonify({"liked": False}), 200
+
+    db.session.add(Like(user_id=current_user.id, post_id=post_id))
+    db.session.commit()
+    return jsonify({"liked": True}), 200
+
+__table_args__ = (
+    db.Index('idx_post_parent', 'parent_id'),
+    db.Index('idx_post_created', 'created_at'),
+    db.Index('idx_like_post', 'post_id'),
+    db.Index('idx_like_user', 'user_id'),
+)
 
 # MAKE SOCIAL MEDIA POSTS -> END
 
