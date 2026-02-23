@@ -486,6 +486,35 @@ def serialize_post(post: Post, current_user=None):
     }
 
 
+# Fetches comments for a given post
+@app.route('/posts/<int:post_id>/comments', methods=['GET'])
+def get_post_comments(post_id):
+    current_user = get_current_user_from_token()
+    if not current_user:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    # Ensure the parent post exists and is not deleted
+    parent_post = Post.query.filter_by(id=post_id, is_deleted=False).first()
+    if not parent_post:
+        return jsonify({"error": "Post not found"}), 404
+
+    # Fetch only comments (replies)
+    comments = (
+        Post.query
+        .filter_by(parent_id=post_id, is_deleted=False)
+        .order_by(Post.created_at.asc())
+        .all()
+    )
+
+    return jsonify({
+        "post_id": post_id,
+        "comment_count": len(comments),
+        "comments": [
+            serialize_post(comment, current_user)
+            for comment in comments
+        ]
+    }), 200
+
 # MAKE SOCIAL MEDIA POSTS -> END
 
 # CREATE A GROUP -> START
