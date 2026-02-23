@@ -561,13 +561,30 @@ def get_post_comments(post_id):
 @app.route('/posts/<int:comment_id>', methods=['PUT'])
 def edit_comment(comment_id):
     current_user = get_current_user_from_token()
+    if not current_user:
+        return jsonify({"error": "Unauthorized"}), 401
+
     comment = Post.query.get_or_404(comment_id)
 
+    # Ensure this is a comment
+    if comment.parent_id is None:
+        return jsonify({"error": "Not a comment"}), 400
+
+    # Prevent editing deleted comments
+    if comment.is_deleted:
+        return jsonify({"error": "Comment deleted"}), 400
+
+    # Ownership check
     if comment.author_id != current_user.id:
         return jsonify({"error": "Forbidden"}), 403
 
-    data = request.json
-    comment.text = data.get("text", comment.text)
+    data = request.get_json() or {}
+    new_text = data.get("text")
+
+    if not new_text or not new_text.strip():
+        return jsonify({"error": "Text is required"}), 400
+
+    comment.text = new_text.strip()
     db.session.commit()
 
     return jsonify(serialize_post(comment, current_user)), 200
