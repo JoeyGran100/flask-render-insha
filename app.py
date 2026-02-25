@@ -485,6 +485,50 @@ def serialize_post(post: Post, current_user=None):
         "user_liked": user_liked
     }
 
+# This endpoint allows users to create comments on posts. Comments can also be replies to other comments, allowing for nested threads.
+@app.route('/posts/<int:post_id>/comments', methods=['POST'])
+def create_comment(post_id):
+    current_user = get_current_user_from_token()
+    if not current_user:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    # Ensure parent post exists and is not deleted
+    parent_post = Post.query.get_or_404(post_id)
+    if parent_post.is_deleted:
+        return jsonify({"error": "Post deleted"}), 400
+
+    data = request.get_json() or {}
+    text = data.get("text")
+    parent_id = data.get("parent_id", post_id)  # allow replies to comments
+
+    if not text or not text.strip():
+        return jsonify({"error": "Text is required"}), 400
+
+    # If replying to a comment, validate it belongs to the same post thread
+    if parent_id != post_id:
+        parent_comment = Post.query.get_or_404(parent_id)
+        if parent_comment.is_deleted:
+            return jsonify({"error": "Parent comment deleted"}), 400
+
+    comment = Post(
+        author_id=current_user.id,
+        text=text.strip(),
+        post_type="comment",
+        parent_id=parent_id
+    )
+
+    db.session.add(comment)
+    db.session.commit()
+
+    return jsonify({
+        **serialize_post(comment, current_user),
+        "like_count": 0,
+        "liked_by_me": False,
+        "can_edit": True,
+        "can_delete": True,
+        "replies": []
+    }), 201
+
 
 # Fetches comments for a given post
 @app.route('/posts/<int:post_id>/comments', methods=['GET'])
@@ -557,7 +601,7 @@ def get_post_comments(post_id):
         "has_more": has_more
     }), 200
     
-    
+# This endpoint allows users to edit their own comments. Admins can also edit any comment.    
 @app.route('/posts/<int:comment_id>', methods=['PUT'])
 def edit_comment(comment_id):
     current_user = get_current_user_from_token()
@@ -590,6 +634,7 @@ def edit_comment(comment_id):
     return jsonify(serialize_post(comment, current_user)), 200
 
 
+# This endpoint performs a soft delete by setting is_deleted=True
 @app.route('/posts/<int:comment_id>', methods=['DELETE'])
 def delete_comment(comment_id):
     current_user = get_current_user_from_token()
@@ -606,6 +651,7 @@ def delete_comment(comment_id):
     return jsonify({"success": True}), 200
 
 
+# This endpoint toggles like/unlike for a post
 @app.route('/posts/<int:post_id>/like', methods=['POST'])
 def toggle_like(post_id):
     current_user = get_current_user_from_token()
