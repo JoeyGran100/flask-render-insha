@@ -581,7 +581,7 @@ def get_post_comments(post_id):
             ),
             "can_edit": c.author_id == current_user.id,
             "can_delete": (
-                c.author_id == current_user.id or current_user.is_admin
+                c.author_id == current_user.id or getattr(current_user, "is_admin", False)
             ),
             "replies": []
         }
