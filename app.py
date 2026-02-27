@@ -260,6 +260,13 @@ class Post(db.Model):
 
     # ✅ Add this for likes
     likes = db.relationship('Like', backref='post', lazy=True)
+    
+    __table_args__ = (
+    db.Index('idx_post_parent', 'parent_id'),
+    db.Index('idx_post_created', 'created_at'),
+    db.Index('idx_like_post', 'post_id'),
+    db.Index('idx_like_user', 'user_id'),
+)
 
 
 class Hashtag(db.Model):
@@ -710,12 +717,6 @@ def toggle_like(post_id):
     db.session.commit()
     return jsonify({"liked": True}), 200
 
-__table_args__ = (
-    db.Index('idx_post_parent', 'parent_id'),
-    db.Index('idx_post_created', 'created_at'),
-    db.Index('idx_like_post', 'post_id'),
-    db.Index('idx_like_user', 'user_id'),
-)
 
 # MAKE SOCIAL MEDIA POSTS -> END
 
