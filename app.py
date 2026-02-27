@@ -538,8 +538,9 @@ def get_post_comments(post_id):
         return jsonify({"error": "Unauthorized"}), 401
 
     limit = request.args.get('limit', 10, type=int)
-    cursor = request.args.get('cursor')  # ISO timestamp
+    cursor = request.args.get('cursor')
 
+    # Level 1: Top-level comments
     query = Post.query.filter(
         Post.parent_id == post_id,
         Post.is_deleted == False
@@ -558,17 +559,36 @@ def get_post_comments(post_id):
     has_more = len(comments) > limit
     comments = comments[:limit]
 
-    # Load all descendants for threading
-    all_comment_ids = [c.id for c in comments]
-    descendants = (
+    # ----- NEW 3-LEVEL FETCH -----
+
+    level1 = comments
+    level1_ids = [c.id for c in level1]
+
+    # Level 2
+    level2 = (
         Post.query
-        .filter(Post.parent_id.in_(all_comment_ids))
+        .filter(
+            Post.parent_id.in_(level1_ids),
+            Post.is_deleted == False
+        )
+        .all()
+    )
+    level2_ids = [c.id for c in level2]
+
+    # Level 3
+    level3 = (
+        Post.query
+        .filter(
+            Post.parent_id.in_(level2_ids),
+            Post.is_deleted == False
+        )
         .all()
     )
 
-    all_comments = comments + descendants
+    all_comments = level1 + level2 + level3
 
-    # Build tree
+    # ----- TREE BUILD -----
+
     comment_map = {}
     roots = []
 
