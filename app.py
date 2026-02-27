@@ -260,13 +260,6 @@ class Post(db.Model):
 
     # ✅ Add this for likes
     likes = db.relationship('Like', backref='post', lazy=True)
-    
-    __table_args__ = (
-    db.Index('idx_post_parent', 'parent_id'),
-    db.Index('idx_post_created', 'created_at'),
-    db.Index('idx_like_post', 'post_id'),
-    db.Index('idx_like_user', 'user_id'),
-)
 
 
 class Hashtag(db.Model):
@@ -363,6 +356,7 @@ def get_comments(post_id):
 
 @app.route('/posts', methods=['POST'])
 def create_post():
+    # Get auth token
     auth_header = request.headers.get("Authorization")
     if not auth_header:
         return jsonify({"error": "Missing authorization"}), 401
@@ -371,54 +365,33 @@ def create_post():
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         author_id = payload.get("user_id")
-    except Exception:
+    except Exception as e:
         return jsonify({"error": "Invalid token"}), 401
 
+    # Get post data from frontend
     data = request.json
-    parent_id = data.get("parent_id")
-
-    if parent_id:
-        parent = Post.query.get(parent_id)
-        if not parent or parent.is_deleted:
-            return jsonify({"error": "Invalid parent comment"}), 400
-
-        # Calculate depth (max 3 levels)
-        depth = 1
-        current = parent
-
-        while current.parent_id:
-            current = Post.query.get(current.parent_id)
-            if not current:
-                break
-            depth += 1
-
-        if depth >= 3:
-            return jsonify({
-                "error": "Maximum nesting level (3) reached"
-            }), 400
-
     post = Post(
-        author_id=author_id,
+        author_id=author_id,  # ✅ from token, not frontend
         text=data['text'],
         post_type=data.get('post_type', 'text'),
         media_url=data.get('media_url'),
-        parent_id=parent_id
+        parent_id=data.get('parent_id')  # optional, for replies
     )
 
     db.session.add(post)
     db.session.commit()
-
+    
     return jsonify({
-        "id": post.id,
-        "text": post.text,
-        "post_type": post.post_type,
-        "media_url": post.media_url,
-        "parent_id": post.parent_id,
-        "created_at": post.created_at.isoformat(),
-        "is_deleted": False,
-        "hashtags": [],
-        "isFollowing": False
-    }), 201
+    "id": post.id,
+    "text": post.text,
+    "post_type": post.post_type,
+    "media_url": post.media_url,
+    "parent_id": post.parent_id,
+    "created_at": post.created_at.isoformat(),
+    "is_deleted": False,
+    "hashtags": [],
+    "isFollowing": False
+}), 201
 
 
 # Get all users posts in the app feed
@@ -717,6 +690,12 @@ def toggle_like(post_id):
     db.session.commit()
     return jsonify({"liked": True}), 200
 
+__table_args__ = (
+    db.Index('idx_post_parent', 'parent_id'),
+    db.Index('idx_post_created', 'created_at'),
+    db.Index('idx_like_post', 'post_id'),
+    db.Index('idx_like_user', 'user_id'),
+)
 
 # MAKE SOCIAL MEDIA POSTS -> END
 
