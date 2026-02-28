@@ -19,7 +19,7 @@ import logging
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp8_render_example_user:Fs1zM0iDJFQigMc6Jrh3tKKkhiqN6w7M@dpg-d6hc2n24d50c73f88v00-a.frankfurt-postgres.render.com/inshaapp8_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp9_render_example_user:KDxvhH4LjotMcDx4m7rD879tchTLOm7N@dpg-d6hh587kijhs73fgkch0-a.frankfurt-postgres.render.com/inshaapp9_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -292,12 +292,17 @@ class Hashtag(db.Model):
 class Like(db.Model):
     __tablename__ = 'like'
 
-    user_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),primary_key=True)
-    post_id = db.Column(db.Integer,db.ForeignKey('post.id'),primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), primary_key=True)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey('comment.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (
-        db.UniqueConstraint("user_id", "post_id", name="unique_user_post_like"),
+        db.CheckConstraint(
+            '(post_id IS NOT NULL AND comment_id IS NULL) OR '
+            '(post_id IS NULL AND comment_id IS NOT NULL)',
+            name='like_on_post_or_comment'
+        ),
     )
     
 
@@ -312,15 +317,25 @@ class Follow(db.Model):
         CheckConstraint('follower_id != following_id', name='no_self_follow'),
     )
 
-
+    
 class Report(db.Model):
     __tablename__ = 'report'
 
     id = db.Column(db.Integer, primary_key=True)
-    reporter_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),nullable=False)
-    post_id = db.Column(db.Integer,db.ForeignKey('post.id'),nullable=False)
+    reporter_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey('comment.id'), nullable=True)
     reason = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.CheckConstraint(
+            '(post_id IS NOT NULL AND comment_id IS NULL) OR '
+            '(post_id IS NULL AND comment_id IS NOT NULL)',
+            name='report_on_post_or_comment'
+        ),
+    )   
+    
 
 # 1️⃣ Association table MUST come first
 group_members = db.Table(
@@ -328,6 +343,7 @@ group_members = db.Table(
     db.Column('group_id', db.Integer, db.ForeignKey('groups.id'), primary_key=True),
     db.Column('user_id', db.Integer, db.ForeignKey('userdetails.id'), primary_key=True)
 )
+
 
 class Groups(db.Model):
     __tablename__ = 'groups'
