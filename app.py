@@ -247,19 +247,19 @@ class Post(db.Model):
     __tablename__ = 'post'
 
     id = db.Column(db.Integer, primary_key=True)
-    author_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     text = db.Column(db.Text, nullable=False)
     post_type = db.Column(db.String(20))  # text, image, video
     media_url = db.Column(db.String(255), nullable=True)
-    created_at = db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False)
-    group_id = db.Column(db.Integer,db.ForeignKey('groups.id'),nullable=True)
-    hashtags = db.relationship('Hashtag',secondary='post_hashtag',backref='posts')
-    likes = db.relationship('Like',backref='post',lazy=True,cascade="all, delete-orphan")
-    comments = db.relationship('Comment',backref='post',lazy=True,cascade="all, delete-orphan")
-    
+    group_id = db.Column(db.Integer, db.ForeignKey('groups.id'), nullable=True)
+    hashtags = db.relationship('Hashtag', secondary='post_hashtag', backref='posts')
+    likes = db.relationship('Like', backref='post', lazy=True, cascade="all, delete-orphan")
+    comments = db.relationship('Comment', backref='post', lazy=True, cascade="all, delete-orphan")
+
     __table_args__ = (
-        db.Index('ix_comment_post_parent', 'post_id', 'parent_id'),
+        db.Index('idx_post_created', 'created_at'),
     )
 
 
@@ -267,16 +267,17 @@ class Comment(db.Model):
     __tablename__ = 'comment'
 
     id = db.Column(db.Integer, primary_key=True)
-    post_id = db.Column(db.Integer,db.ForeignKey('post.id', ondelete='CASCADE'),nullable=False,index=True)
-    author_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),nullable=False)
+    post_id = db.Column(db.Integer, db.ForeignKey('post.id', ondelete='CASCADE'), nullable=False, index=True)
+    author_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    parent_id = db.Column(db.Integer,db.ForeignKey('comment.id', ondelete='CASCADE'),nullable=True,index=True)
-    replies = db.relationship('Comment',backref=db.backref('parent', remote_side=[id]),cascade="all, delete-orphan",lazy=True)
-    created_at = db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey('comment.id', ondelete='CASCADE'), nullable=True, index=True)
+    replies = db.relationship('Comment', backref=db.backref('parent', remote_side=[id]), cascade="all, delete-orphan", lazy=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False)
 
     __table_args__ = (
         db.Index('ix_comment_post_parent', 'post_id', 'parent_id'),
+        db.Index('ix_comment_created', 'created_at'),  # optional but recommended
     )
 
 
