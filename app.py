@@ -15,7 +15,7 @@ import traceback
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import jwt
 import logging
-
+from sqlalchemy import func
 
 app = Flask(__name__)
 app.config[
