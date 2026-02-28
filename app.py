@@ -576,56 +576,88 @@ def get_post_comments(post_id):
     if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
-    # Fetch top-level comments
-    top_comments = Comment.query.filter(
+    # ------------------------------------------------
+    # 1️⃣ Fetch all comments (top-level + replies)
+    # ------------------------------------------------
+    all_comments = Comment.query.filter(
         Comment.post_id == post_id,
-        Comment.parent_id == None,
         Comment.is_deleted == False
     ).order_by(Comment.created_at.asc()).all()
 
-    # Fetch all replies in bulk
-    replies = Comment.query.filter(
-        Comment.post_id == post_id,
-        Comment.parent_id != None,
-        Comment.is_deleted == False
-    ).all()
+    if not all_comments:
+        return jsonify({
+            "post_id": post_id,
+            "comments": []
+        }), 200
 
-    # Prepare a map for all comments (id -> dict)
+    # ------------------------------------------------
+    # 2️⃣ Collect all author IDs
+    # ------------------------------------------------
+    author_ids = {c.author_id for c in all_comments}
+
+    # ------------------------------------------------
+    # 3️⃣ Fetch profiles in bulk
+    # ------------------------------------------------
+    profiles = UserProfile.query.filter(
+        UserProfile.user_auth_id.in_(author_ids)
+    ).all()
+    profile_map = {p.user_auth_id: p for p in profiles}
+
+    # ------------------------------------------------
+    # 4️⃣ Fetch user images in bulk
+    # ------------------------------------------------
+    images = UserImages.query.filter(
+        UserImages.user_auth_id.in_(author_ids)
+    ).all()
+    image_map = {img.user_auth_id: img for img in images}
+
+    # ------------------------------------------------
+    # 5️⃣ Fetch like counts in bulk (grouped)
+    # ------------------------------------------------
+    like_counts = db.session.query(
+        Like.comment_id,
+        func.count(Like.user_id)
+    ).filter(
+        Like.comment_id.in_([c.id for c in all_comments])
+    ).group_by(Like.comment_id).all()
+
+    like_map = {comment_id: count for comment_id, count in like_counts}
+
+    # ------------------------------------------------
+    # 6️⃣ Build comment dictionary map
+    # ------------------------------------------------
     comment_map = {}
     roots = []
 
-    def serialize_comment(c):
-        # Fetch author profile
-        profile = UserProfile.query.filter_by(user_auth_id=c.author_id).first()
-        # Fetch author image
-        user_image = UserImages.query.filter_by(user_auth_id=c.author_id).first()
-        # Count likes
-        like_count = Like.query.filter_by(comment_id=c.id).count()
-        return {
+    for c in all_comments:
+        profile = profile_map.get(c.author_id)
+        user_image = image_map.get(c.author_id)
+
+        comment_map[c.id] = {
             "id": c.id,
             "author_name": f"{profile.firstname} {profile.lastname}" if profile else "",
             "text": c.content or "",
             "created_at": c.created_at.isoformat(),
-            "like_count": like_count,
+            "like_count": like_map.get(c.id, 0),
             "parent_id": c.parent_id,
             "user_image": user_image.imageString if user_image else None,
             "replies": []
         }
 
-    # Add top-level comments to map
-    for c in top_comments:
-        comment_map[c.id] = serialize_comment(c)
-        roots.append(comment_map[c.id])
+    # ------------------------------------------------
+    # 7️⃣ Build tree structure
+    # ------------------------------------------------
+    for c in all_comments:
+        if c.parent_id:
+            parent = comment_map.get(c.parent_id)
+            if parent:
+                parent["replies"].append(comment_map[c.id])
+        else:
+            roots.append(comment_map[c.id])
 
-    # Map replies to their parent
-    for r in replies:
-        parent = comment_map.get(r.parent_id)
-        if parent:
-            reply_dict = serialize_comment(r)
-            parent["replies"].append(reply_dict)
-            # Also add to map for nested replies (if you have multiple levels)
-            comment_map[r.id] = reply_dict
-
+    # ------------------------------------------------
+    # 8️⃣ Return response
+    # ------------------------------------------------
     return jsonify({
         "post_id": post_id,
         "comments": roots
