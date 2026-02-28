@@ -395,40 +395,52 @@ def get_comments(post_id):
 
 @app.route('/posts', methods=['POST'])
 def create_post():
-    # Get auth token
+    # ✅ Auth header check
     auth_header = request.headers.get("Authorization")
     if not auth_header:
         return jsonify({"error": "Missing authorization"}), 401
 
-    token = auth_header.split(" ")[1]
+    parts = auth_header.split(" ")
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return jsonify({"error": "Invalid authorization format"}), 401
+
+    token = parts[1]
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         author_id = payload.get("user_id")
-    except Exception as e:
+    except Exception:
         return jsonify({"error": "Invalid token"}), 401
 
-    # Get post data from frontend
+    # ✅ Body check
     data = request.json
+    if not data:
+        return jsonify({"error": "Invalid or missing JSON body"}), 400
+
+    # ✅ Text validation
+    text = data.get('text', '').strip()
+    if not text:
+        return jsonify({"error": "Post text is required"}), 400
+
     post = Post(
-        author_id=author_id,  # ✅ from token, not frontend
-        text=data['text'],
+        author_id=author_id,
+        text=text,
         post_type=data.get('post_type', 'text'),
         media_url=data.get('media_url'),
     )
 
     db.session.add(post)
     db.session.commit()
-    
+
     return jsonify({
-    "id": post.id,
-    "text": post.text,
-    "post_type": post.post_type,
-    "media_url": post.media_url,
-    "created_at": post.created_at.isoformat(),
-    "is_deleted": False,
-    "hashtags": [],
-    "isFollowing": False
-}), 201
+        "id": post.id,
+        "text": post.text,
+        "post_type": post.post_type,
+        "media_url": post.media_url,
+        "created_at": post.created_at.isoformat(),
+        "is_deleted": False,
+        "hashtags": [],
+        "isFollowing": False
+    }), 201
 
 
 # Get all users posts in the app feed
@@ -520,18 +532,23 @@ def create_comment(post_id):
     if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
-    post = Post.query.get_or_404(post_id)
+    # ✅ Ignore deleted posts
+    post = Post.query.filter_by(id=post_id, is_deleted=False).first()
+    if not post:
+        return jsonify({"error": "Post not found"}), 404
 
     data = request.get_json() or {}
     text = data.get("text")
-    parent_id = data.get("parent_id")  # reply to comment
+    parent_id = data.get("parent_id")
 
     if not text or not text.strip():
         return jsonify({"error": "Text is required"}), 400
 
-    # Validate parent comment if replying
+    # ✅ Ignore deleted parent comments
     if parent_id:
-        parent_comment = Comment.query.get_or_404(parent_id)
+        parent_comment = Comment.query.filter_by(id=parent_id, is_deleted=False).first()
+        if not parent_comment:
+            return jsonify({"error": "Parent comment not found"}), 404
         if parent_comment.post_id != post_id:
             return jsonify({"error": "Invalid parent comment"}), 400
 
