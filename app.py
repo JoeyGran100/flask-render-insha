@@ -1,3 +1,4 @@
+import profile
 import random
 from datetime import datetime, timezone
 import re
@@ -559,52 +560,55 @@ def get_post_comments(post_id):
     if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
-    # -----------------------------
-    # Step 1: Fetch top-level comments only
-    # -----------------------------
+    # Fetch top-level comments
     top_comments = Comment.query.filter(
         Comment.post_id == post_id,
         Comment.parent_id == None,
         Comment.is_deleted == False
     ).order_by(Comment.created_at.asc()).all()
 
-    # -----------------------------
-    # Step 2: Fetch all replies in bulk (avoid N+1 queries)
-    # -----------------------------
+    # Fetch all replies in bulk
     replies = Comment.query.filter(
         Comment.post_id == post_id,
         Comment.parent_id != None,
         Comment.is_deleted == False
     ).all()
 
-    # -----------------------------
-    # Step 3: Build a comment tree in memory
-    # -----------------------------
+    # Prepare a map for all comments (id -> dict)
     comment_map = {}
     roots = []
 
-    # Add top-level comments
-    for c in top_comments:
-        comment_map[c.id] = {
+    def serialize_comment(c):
+        # Fetch author profile
+        profile = UserProfile.query.filter_by(user_auth_id=c.author_id).first()
+        # Fetch author image
+        user_image = UserImages.query.filter_by(user_auth_id=c.author_id).first()
+        # Count likes
+        like_count = Like.query.filter_by(comment_id=c.id).count()
+        return {
             "id": c.id,
-            "author_id": c.author_id,
-            "content": c.content,
+            "author_name": f"{profile.firstname} {profile.lastname}" if profile else "",
+            "text": c.content or "",
             "created_at": c.created_at.isoformat(),
+            "like_count": like_count,
+            "parent_id": c.parent_id,
+            "user_image": user_image.imageString if user_image else None,
             "replies": []
         }
+
+    # Add top-level comments to map
+    for c in top_comments:
+        comment_map[c.id] = serialize_comment(c)
         roots.append(comment_map[c.id])
 
-    # Map replies to their parent comments
+    # Map replies to their parent
     for r in replies:
         parent = comment_map.get(r.parent_id)
         if parent:
-            parent["replies"].append({
-                "id": r.id,
-                "author_id": r.author_id,
-                "content": r.content,
-                "created_at": r.created_at.isoformat(),
-                "replies": []
-            })
+            reply_dict = serialize_comment(r)
+            parent["replies"].append(reply_dict)
+            # Also add to map for nested replies (if you have multiple levels)
+            comment_map[r.id] = reply_dict
 
     return jsonify({
         "post_id": post_id,
