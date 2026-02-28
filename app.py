@@ -250,7 +250,7 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     author_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     text = db.Column(db.Text, nullable=False)
-    post_type = db.Column(db.String(20))  # text, image, video
+    post_type = db.Column(db.String(20))
     media_url = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     is_deleted = db.Column(db.Boolean, default=False)
@@ -278,8 +278,8 @@ class Comment(db.Model):
 
     __table_args__ = (
         db.Index('ix_comment_post_parent', 'post_id', 'parent_id'),
-        db.Index('ix_comment_created', 'created_at'),  # optional but recommended
-    )
+        db.Index('ix_comment_created', 'created_at'),
+    )                                                             # ✅ Nothing after this
 
 
 class Hashtag(db.Model):
@@ -438,32 +438,23 @@ def get_all_posts():
     if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
-    # Pagination
     limit = request.args.get('limit', 10, type=int)
-    cursor = request.args.get('cursor')  # ISO datetime string
+    cursor = request.args.get('cursor')
 
-    # -----------------------------
-    # Step 1: Base query: all posts not deleted
-    # -----------------------------
     query = Post.query.filter_by(is_deleted=False).order_by(Post.created_at.desc())
 
-    # Apply cursor (for infinite scroll)
     if cursor:
-        query = query.filter(Post.created_at < cursor)
+        try:
+            cursor_dt = datetime.fromisoformat(cursor)
+            query = query.filter(Post.created_at < cursor_dt)
+        except ValueError:
+            return jsonify({"error": "Invalid cursor format"}), 400
 
-    # Fetch posts with limit + 1 to check has_more
     posts = query.limit(limit + 1).all()
     has_more = len(posts) > limit
     posts = posts[:limit]
 
-    # -----------------------------
-    # Step 2: Next cursor
-    # -----------------------------
-    next_cursor = posts[-1].created_at.isoformat() if posts else None
-
-    # -----------------------------
-    # Step 3: Serialize posts for frontend
-    # -----------------------------
+    next_cursor = posts[-1].created_at.isoformat() if has_more else None
     serialized_posts = [serialize_post(post, current_user) for post in posts]
 
     return jsonify({
@@ -497,16 +488,10 @@ def get_my_posts():
 
 
 def serialize_post(post: Post, current_user=None):
-    # Fetch author profile
     profile = UserProfile.query.filter_by(user_auth_id=post.author_id).first()
-
-    # Fetch author image
     user_image = UserImages.query.filter_by(user_auth_id=post.author_id).first()
-
-    # Count likes
     like_count = Like.query.filter_by(post_id=post.id).count()
 
-    # Did current user like this post?
     user_liked = False
     if current_user:
         user_liked = Like.query.filter_by(post_id=post.id, user_id=current_user.id).first() is not None
@@ -576,56 +561,30 @@ def get_post_comments(post_id):
     if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
-    # ------------------------------------------------
-    # 1️⃣ Fetch all comments (top-level + replies)
-    # ------------------------------------------------
     all_comments = Comment.query.filter(
         Comment.post_id == post_id,
         Comment.is_deleted == False
     ).order_by(Comment.created_at.asc()).all()
 
     if not all_comments:
-        return jsonify({
-            "post_id": post_id,
-            "comments": []
-        }), 200
+        return jsonify({"post_id": post_id, "comments": []}), 200
 
-    # ------------------------------------------------
-    # 2️⃣ Collect all author IDs
-    # ------------------------------------------------
     author_ids = {c.author_id for c in all_comments}
 
-    # ------------------------------------------------
-    # 3️⃣ Fetch profiles in bulk
-    # ------------------------------------------------
-    profiles = UserProfile.query.filter(
-        UserProfile.user_auth_id.in_(author_ids)
-    ).all()
+    profiles = UserProfile.query.filter(UserProfile.user_auth_id.in_(author_ids)).all()
     profile_map = {p.user_auth_id: p for p in profiles}
 
-    # ------------------------------------------------
-    # 4️⃣ Fetch user images in bulk
-    # ------------------------------------------------
-    images = UserImages.query.filter(
-        UserImages.user_auth_id.in_(author_ids)
-    ).all()
+    images = UserImages.query.filter(UserImages.user_auth_id.in_(author_ids)).all()
     image_map = {img.user_auth_id: img for img in images}
 
-    # ------------------------------------------------
-    # 5️⃣ Fetch like counts in bulk (grouped)
-    # ------------------------------------------------
     like_counts = db.session.query(
         Like.comment_id,
         func.count(Like.user_id)
     ).filter(
         Like.comment_id.in_([c.id for c in all_comments])
     ).group_by(Like.comment_id).all()
-
     like_map = {comment_id: count for comment_id, count in like_counts}
 
-    # ------------------------------------------------
-    # 6️⃣ Build comment dictionary map
-    # ------------------------------------------------
     comment_map = {}
     roots = []
 
@@ -644,9 +603,6 @@ def get_post_comments(post_id):
             "replies": []
         }
 
-    # ------------------------------------------------
-    # 7️⃣ Build tree structure
-    # ------------------------------------------------
     for c in all_comments:
         if c.parent_id:
             parent = comment_map.get(c.parent_id)
@@ -655,9 +611,6 @@ def get_post_comments(post_id):
         else:
             roots.append(comment_map[c.id])
 
-    # ------------------------------------------------
-    # 8️⃣ Return response
-    # ------------------------------------------------
     return jsonify({
         "post_id": post_id,
         "comments": roots
