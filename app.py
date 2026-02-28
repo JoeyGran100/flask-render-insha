@@ -418,22 +418,41 @@ def create_post():
 @app.route('/posts/feed', methods=['GET'])
 def get_all_posts():
     current_user = get_current_user_from_token()
-
     if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
-    posts = (
-        Post.query
-        .filter_by(is_deleted=False)
-        .order_by(Post.created_at.desc())
-        .all()
-    )
+    # Pagination
+    limit = request.args.get('limit', 10, type=int)
+    cursor = request.args.get('cursor')  # ISO datetime string
+
+    # -----------------------------
+    # Step 1: Base query: all posts not deleted
+    # -----------------------------
+    query = Post.query.filter_by(is_deleted=False).order_by(Post.created_at.desc())
+
+    # Apply cursor (for infinite scroll)
+    if cursor:
+        query = query.filter(Post.created_at < cursor)
+
+    # Fetch posts with limit + 1 to check has_more
+    posts = query.limit(limit + 1).all()
+    has_more = len(posts) > limit
+    posts = posts[:limit]
+
+    # -----------------------------
+    # Step 2: Next cursor
+    # -----------------------------
+    next_cursor = posts[-1].created_at.isoformat() if posts else None
+
+    # -----------------------------
+    # Step 3: Serialize posts for frontend
+    # -----------------------------
+    serialized_posts = [serialize_post(post, current_user) for post in posts]
 
     return jsonify({
-        "posts": [
-            serialize_post(post, current_user)
-            for post in posts
-        ]
+        "posts": serialized_posts,
+        "next_cursor": next_cursor,
+        "has_more": has_more
     }), 200
 
 
