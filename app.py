@@ -481,14 +481,10 @@ def get_my_posts():
 
 def serialize_post(post: Post, current_user=None):
     # Fetch author profile
-    profile = UserProfile.query.filter_by(
-        user_auth_id=post.author_id
-    ).first()
+    profile = UserProfile.query.filter_by(user_auth_id=post.author_id).first()
 
     # Fetch author image
-    user_image = UserImages.query.filter_by(
-        user_auth_id=post.author_id
-    ).first()
+    user_image = UserImages.query.filter_by(user_auth_id=post.author_id).first()
 
     # Count likes
     like_count = Like.query.filter_by(post_id=post.id).count()
@@ -496,33 +492,24 @@ def serialize_post(post: Post, current_user=None):
     # Did current user like this post?
     user_liked = False
     if current_user:
-        user_liked = (
-            Like.query.filter_by(
-                post_id=post.id,
-                user_id=current_user.id
-            ).first()
-            is not None
-        )
+        user_liked = Like.query.filter_by(post_id=post.id, user_id=current_user.id).first() is not None
 
     return {
         "id": post.id,
         "author_id": post.author_id,
-        "author_name": (
-            f"{profile.firstname} {profile.lastname}"
-            if profile else None
-        ),
+        "author_name": f"{profile.firstname} {profile.lastname}" if profile else None,
         "author_email": profile.email if profile else None,
         "user_image": user_image.imageString if user_image else None,
         "text": post.text,
         "post_type": post.post_type,
         "media_url": post.media_url,
-        "parent_id": post.parent_id,
         "created_at": post.created_at.isoformat(),
         "is_deleted": post.is_deleted,
         "hashtags": [tag.name for tag in post.hashtags],
         "like_count": like_count,
         "user_liked": user_liked
     }
+    
 
 # This endpoint allows users to create comments on posts. Comments can also be replies to other comments, allowing for nested threads.
 @app.route('/posts/<int:post_id>/comments', methods=['POST'])
