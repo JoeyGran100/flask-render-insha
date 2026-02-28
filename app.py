@@ -18,7 +18,7 @@ import logging
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp7_render_example_user:FoAICSU1aLfFHOC6wn9tDW6x96KGgv4V@dpg-d6cn0evfte5s73csopn0-a.frankfurt-postgres.render.com/inshaapp7_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp8_render_example_user:Fs1zM0iDJFQigMc6Jrh3tKKkhiqN6w7M@dpg-d6hc2n24d50c73f88v00-a.frankfurt-postgres.render.com/inshaapp8_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 
@@ -247,19 +247,37 @@ class Post(db.Model):
     __tablename__ = 'post'
 
     id = db.Column(db.Integer, primary_key=True)
-    author_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
+    author_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),nullable=False)
     text = db.Column(db.Text, nullable=False)
     post_type = db.Column(db.String(20))  # text, image, video
     media_url = db.Column(db.String(255), nullable=True)
-    parent_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=True)
-    replies = db.relationship('Post',backref=db.backref('parent', remote_side=[id]),lazy=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
     is_deleted = db.Column(db.Boolean, default=False)
-    hashtags = db.relationship('Hashtag',secondary='post_hashtag',backref='posts')
     group_id = db.Column(db.Integer,db.ForeignKey('groups.id'),nullable=True)
+    hashtags = db.relationship('Hashtag',secondary='post_hashtag',backref='posts')
+    likes = db.relationship('Like',backref='post',lazy=True,cascade="all, delete-orphan")
+    comments = db.relationship('Comment',backref='post',lazy=True,cascade="all, delete-orphan")
+    
+    __table_args__ = (
+        db.Index('ix_comment_post_parent', 'post_id', 'parent_id'),
+    )
 
-    # ✅ Add this for likes
-    likes = db.relationship('Like', backref='post', lazy=True)
+
+class Comment(db.Model):
+    __tablename__ = 'comment'
+
+    id = db.Column(db.Integer, primary_key=True)
+    post_id = db.Column(db.Integer,db.ForeignKey('post.id', ondelete='CASCADE'),nullable=False,index=True)
+    author_id = db.Column(db.Integer,db.ForeignKey('userdetails.id'),nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    parent_id = db.Column(db.Integer,db.ForeignKey('comment.id', ondelete='CASCADE'),nullable=True,index=True)
+    replies = db.relationship('Comment',backref=db.backref('parent', remote_side=[id]),cascade="all, delete-orphan",lazy=True)
+    created_at = db.Column(db.DateTime,default=datetime.utcnow,nullable=False)
+    is_deleted = db.Column(db.Boolean, default=False)
+
+    __table_args__ = (
+        db.Index('ix_comment_post_parent', 'post_id', 'parent_id'),
+    )
 
 
 class Hashtag(db.Model):
@@ -350,7 +368,10 @@ with app.app_context():
 # API Endpoints
 
 def get_comments(post_id):
-    return Post.query.filter_by(parent_id=post_id).order_by(Post.created_at).all()
+    return Comment.query.filter_by(
+        post_id=post_id,
+        parent_id=None
+    ).order_by(Comment.created_at.asc()).all()
 
 # MAKE SOCIAL MEDIA POSTS -> Start
 
@@ -375,7 +396,6 @@ def create_post():
         text=data['text'],
         post_type=data.get('post_type', 'text'),
         media_url=data.get('media_url'),
-        parent_id=data.get('parent_id')  # optional, for replies
     )
 
     db.session.add(post)
@@ -386,7 +406,6 @@ def create_post():
     "text": post.text,
     "post_type": post.post_type,
     "media_url": post.media_url,
-    "parent_id": post.parent_id,
     "created_at": post.created_at.isoformat(),
     "is_deleted": False,
     "hashtags": [],
@@ -492,28 +511,25 @@ def create_comment(post_id):
     if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
-    # Ensure parent post exists and is not deleted
-    parent_post = Post.query.get_or_404(post_id)
-    if parent_post.is_deleted:
-        return jsonify({"error": "Post deleted"}), 400
+    post = Post.query.get_or_404(post_id)
 
     data = request.get_json() or {}
     text = data.get("text")
-    parent_id = data.get("parent_id", post_id)  # allow replies to comments
+    parent_id = data.get("parent_id")  # reply to comment
 
     if not text or not text.strip():
         return jsonify({"error": "Text is required"}), 400
 
-    # If replying to a comment, validate it belongs to the same post thread
-    if parent_id != post_id:
-        parent_comment = Post.query.get_or_404(parent_id)
-        if parent_comment.is_deleted:
-            return jsonify({"error": "Parent comment deleted"}), 400
+    # Validate parent comment if replying
+    if parent_id:
+        parent_comment = Comment.query.get_or_404(parent_id)
+        if parent_comment.post_id != post_id:
+            return jsonify({"error": "Invalid parent comment"}), 400
 
-    comment = Post(
+    comment = Comment(
+        post_id=post_id,
         author_id=current_user.id,
-        text=text.strip(),
-        post_type="comment",
+        content=text.strip(),
         parent_id=parent_id
     )
 
@@ -521,12 +537,11 @@ def create_comment(post_id):
     db.session.commit()
 
     return jsonify({
-        **serialize_post(comment, current_user),
-        "like_count": 0,
-        "liked_by_me": False,
-        "can_edit": True,
-        "can_delete": True,
-        "replies": []
+        "id": comment.id,
+        "post_id": comment.post_id,
+        "parent_id": comment.parent_id,
+        "content": comment.content,
+        "created_at": comment.created_at.isoformat()
     }), 201
 
 
@@ -537,89 +552,58 @@ def get_post_comments(post_id):
     if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
-    limit = request.args.get('limit', 10, type=int)
-    cursor = request.args.get('cursor')
+    # -----------------------------
+    # Step 1: Fetch top-level comments only
+    # -----------------------------
+    top_comments = Comment.query.filter(
+        Comment.post_id == post_id,
+        Comment.parent_id == None,
+        Comment.is_deleted == False
+    ).order_by(Comment.created_at.asc()).all()
 
-    # Level 1: Top-level comments
-    query = Post.query.filter(
-        Post.parent_id == post_id,
-        Post.is_deleted == False
-    )
+    # -----------------------------
+    # Step 2: Fetch all replies in bulk (avoid N+1 queries)
+    # -----------------------------
+    replies = Comment.query.filter(
+        Comment.post_id == post_id,
+        Comment.parent_id != None,
+        Comment.is_deleted == False
+    ).all()
 
-    if cursor:
-        query = query.filter(Post.created_at < cursor)
-
-    comments = (
-        query
-        .order_by(Post.created_at.desc())
-        .limit(limit + 1)
-        .all()
-    )
-
-    has_more = len(comments) > limit
-    comments = comments[:limit]
-
-    # ----- NEW 3-LEVEL FETCH -----
-
-    level1 = comments
-    level1_ids = [c.id for c in level1]
-
-    # Level 2
-    level2 = (
-        Post.query
-        .filter(
-            Post.parent_id.in_(level1_ids),
-            Post.is_deleted == False
-        )
-        .all()
-    )
-    level2_ids = [c.id for c in level2]
-
-    # Level 3
-    level3 = (
-        Post.query
-        .filter(
-            Post.parent_id.in_(level2_ids),
-            Post.is_deleted == False
-        )
-        .all()
-    )
-
-    all_comments = level1 + level2 + level3
-
-    # ----- TREE BUILD -----
-
+    # -----------------------------
+    # Step 3: Build a comment tree in memory
+    # -----------------------------
     comment_map = {}
     roots = []
 
-    for c in all_comments:
+    # Add top-level comments
+    for c in top_comments:
         comment_map[c.id] = {
-            **serialize_post(c, current_user),
-            "like_count": len(c.likes),
-            "liked_by_me": any(
-                l.user_id == current_user.id for l in c.likes
-            ),
-            "can_edit": c.author_id == current_user.id,
-            "can_delete": (
-                c.author_id == current_user.id or getattr(current_user, "is_admin", False)
-            ),
+            "id": c.id,
+            "author_id": c.author_id,
+            "content": c.content,
+            "created_at": c.created_at.isoformat(),
             "replies": []
         }
+        roots.append(comment_map[c.id])
 
-    for c in all_comments:
-        if c.parent_id == post_id:
-            roots.append(comment_map[c.id])
-        elif c.parent_id in comment_map:
-            comment_map[c.parent_id]["replies"].append(comment_map[c.id])
-
-    next_cursor = comments[-1].created_at.isoformat() if comments else None
+    # Map replies to their parent comments
+    for r in replies:
+        parent = comment_map.get(r.parent_id)
+        if parent:
+            parent["replies"].append({
+                "id": r.id,
+                "author_id": r.author_id,
+                "content": r.content,
+                "created_at": r.created_at.isoformat(),
+                "replies": []
+            })
 
     return jsonify({
         "post_id": post_id,
-        "comments": roots,
-        "next_cursor": next_cursor,
-        "has_more": has_more
+        "comments": roots
     }), 200
+    
     
 # This endpoint allows users to edit their own comments. Admins can also edit any comment.    
 @app.route('/posts/<int:comment_id>', methods=['PUT'])
@@ -690,12 +674,6 @@ def toggle_like(post_id):
     db.session.commit()
     return jsonify({"liked": True}), 200
 
-__table_args__ = (
-    db.Index('idx_post_parent', 'parent_id'),
-    db.Index('idx_post_created', 'created_at'),
-    db.Index('idx_like_post', 'post_id'),
-    db.Index('idx_like_user', 'user_id'),
-)
 
 # MAKE SOCIAL MEDIA POSTS -> END
 
