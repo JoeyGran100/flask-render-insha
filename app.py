@@ -467,7 +467,71 @@ def get_all_posts():
     posts = posts[:limit]
 
     next_cursor = posts[-1].created_at.isoformat() if has_more else None
-    serialized_posts = [serialize_post(post, current_user) for post in posts]
+
+    # Fetch top 1 root comment per post + total comment count
+    post_ids = [p.id for p in posts]
+
+    # Get total comment counts per post
+    comment_counts = db.session.query(
+        Comment.post_id,
+        func.count(Comment.id).label('total')
+    ).filter(
+        Comment.post_id.in_(post_ids),
+        Comment.is_deleted == False,
+        Comment.parent_id == None  # root comments only
+    ).group_by(Comment.post_id).all()
+    count_map = {row.post_id: row.total for row in comment_counts}
+
+    # Get the single top root comment per post using a subquery rank
+    # Uses a window function to rank comments per post by created_at
+    ranked = db.session.query(
+        Comment,
+        func.row_number().over(
+            partition_by=Comment.post_id,
+            order_by=Comment.created_at.asc()
+        ).label('rn')
+    ).filter(
+        Comment.post_id.in_(post_ids),
+        Comment.is_deleted == False,
+        Comment.parent_id == None
+    ).subquery()
+
+    top_comments_query = db.session.query(Comment).select_entity_from(ranked).filter(
+        ranked.c.rn == 1
+    ).all()
+
+    # Build a map of post_id -> top comment
+    top_comment_map = {c.post_id: c for c in top_comments_query}
+
+    # Fetch profiles/images for comment authors
+    author_ids = {c.author_id for c in top_comments_query}
+    profiles = UserProfile.query.filter(UserProfile.user_auth_id.in_(author_ids)).all()
+    profile_map = {p.user_auth_id: p for p in profiles}
+    images = UserImages.query.filter(UserImages.user_auth_id.in_(author_ids)).all()
+    image_map = {img.user_auth_id: img for img in images}
+
+    def serialize_top_comment(c):
+        if not c:
+            return None
+        profile = profile_map.get(c.author_id)
+        user_image = image_map.get(c.author_id)
+        return {
+            "id": c.id,
+            "author_name": f"{profile.firstname} {profile.lastname}" if profile else "",
+            "text": c.content or "",
+            "created_at": c.created_at.isoformat(),
+            "user_image": user_image.imageString if user_image else None,
+        }
+
+    serialized_posts = []
+    for post in posts:
+        p = serialize_post(post, current_user)
+        total_root_comments = count_map.get(post.id, 0)
+        top_comment = top_comment_map.get(post.id)
+        p["top_comment"] = serialize_top_comment(top_comment)
+        p["total_comments"] = total_root_comments
+        p["has_more_comments"] = total_root_comments > 1  # more than the 1 we loaded
+        serialized_posts.append(p)
 
     return jsonify({
         "posts": serialized_posts,
@@ -578,19 +642,38 @@ def get_post_comments(post_id):
     if not current_user:
         return jsonify({"error": "Unauthorized"}), 401
 
-    all_comments = Comment.query.filter(
+    limit = request.args.get('limit', 10, type=int)
+    offset = request.args.get('offset', 0, type=int)  # offset-based pagination for comments
+
+    root_comments = Comment.query.filter(
         Comment.post_id == post_id,
+        Comment.is_deleted == False,
+        Comment.parent_id == None
+    ).order_by(Comment.created_at.asc()).offset(offset).limit(limit + 1).all()
+
+    has_more = len(root_comments) > limit
+    root_comments = root_comments[:limit]
+
+    if not root_comments:
+        return jsonify({
+            "post_id": post_id,
+            "comments": [],
+            "has_more": False,
+            "next_offset": offset
+        }), 200
+
+    # Fetch all replies for this page of root comments
+    root_ids = [c.id for c in root_comments]
+    replies = Comment.query.filter(
+        Comment.parent_id.in_(root_ids),
         Comment.is_deleted == False
     ).order_by(Comment.created_at.asc()).all()
 
-    if not all_comments:
-        return jsonify({"post_id": post_id, "comments": []}), 200
-
+    all_comments = root_comments + replies
     author_ids = {c.author_id for c in all_comments}
 
     profiles = UserProfile.query.filter(UserProfile.user_auth_id.in_(author_ids)).all()
     profile_map = {p.user_auth_id: p for p in profiles}
-
     images = UserImages.query.filter(UserImages.user_auth_id.in_(author_ids)).all()
     image_map = {img.user_auth_id: img for img in images}
 
@@ -603,12 +686,9 @@ def get_post_comments(post_id):
     like_map = {comment_id: count for comment_id, count in like_counts}
 
     comment_map = {}
-    roots = []
-
     for c in all_comments:
         profile = profile_map.get(c.author_id)
         user_image = image_map.get(c.author_id)
-
         comment_map[c.id] = {
             "id": c.id,
             "author_name": f"{profile.firstname} {profile.lastname}" if profile else "",
@@ -620,6 +700,7 @@ def get_post_comments(post_id):
             "replies": []
         }
 
+    roots = []
     for c in all_comments:
         if c.parent_id:
             parent = comment_map.get(c.parent_id)
@@ -630,7 +711,9 @@ def get_post_comments(post_id):
 
     return jsonify({
         "post_id": post_id,
-        "comments": roots
+        "comments": roots,
+        "has_more": has_more,
+        "next_offset": offset + limit if has_more else None
     }), 200
     
     
