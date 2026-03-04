@@ -773,23 +773,10 @@ def toggle_like(post_id):
 
 # CREATE A GROUP -> START
 
+    
 @app.route('/groups', methods=['POST'])
 def create_group():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        return jsonify({"error": "Missing authorization"}), 401
-
-    token = auth_header.split(" ")[1]
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-    except jwt.ExpiredSignatureError:
-        return jsonify({"error": "Token expired"}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Invalid token"}), 401
-
-    user_id = payload.get("user_id")
-    if not user_id:
-        return jsonify({"error": "Invalid token payload"}), 401
+    current_user = get_current_user_from_token()
 
     data = request.json
     name = data.get("name")
@@ -799,7 +786,6 @@ def create_group():
     if not name:
         return jsonify({"error": "Group name is required"}), 400
 
-    # ❌ Prevent duplicate group names
     if Groups.query.filter_by(name=name).first():
         return jsonify({"error": "Group name already exists"}), 409
 
@@ -808,12 +794,10 @@ def create_group():
             name=name,
             description=description,
             image_url=image_url,
-            creator_id=user_id
+            creator_id=current_user.id
         )
 
-        # ✅ Add creator as first member
-        creator = db.session.get(User, user_id)
-        group.members.append(creator)
+        group.members.append(current_user)
 
         db.session.add(group)
         db.session.commit()
