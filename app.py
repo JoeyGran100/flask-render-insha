@@ -16,12 +16,14 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import jwt
 import logging
 from sqlalchemy import func
+from flask_migrate import Migrate
 
 app = Flask(__name__)
 app.config[
     'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp9_render_example_user:KDxvhH4LjotMcDx4m7rD879tchTLOm7N@dpg-d6hh587kijhs73fgkch0-a.frankfurt-postgres.render.com/inshaapp9_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
+migrate = Migrate(app, db)  # 2️⃣ migrate second, now db exists
 
 # Set the upload folder configuration
 app.config['UPLOAD_FOLDER'] = 'uploads'
