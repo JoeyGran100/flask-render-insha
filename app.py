@@ -786,7 +786,7 @@ def toggle_like(post_id):
 # MAKE SOCIAL MEDIA POSTS -> END
 
 # CREATE A GROUP -> START
-VALID_GENDER_RESTRICTIONS = {"Everyone", "Male-only", "Female-only  "}
+VALID_GENDER_RESTRICTIONS = {"Everyone", "Male-only", "Female-only"}  # removed trailing spaces
 
 @app.route('/groups', methods=['POST'])
 def create_group(): 
