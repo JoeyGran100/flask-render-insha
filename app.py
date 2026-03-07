@@ -786,7 +786,7 @@ def toggle_like(post_id):
 # MAKE SOCIAL MEDIA POSTS -> END
 
 # CREATE A GROUP -> START
-VALID_GENDER_RESTRICTIONS = {"all", "male", "female"}
+VALID_GENDER_RESTRICTIONS = {"everyone", "only-male", "only-female"}
 
 @app.route('/groups', methods=['POST'])
 def create_group():
@@ -796,18 +796,18 @@ def create_group():
     name = data.get("name")
     description = data.get("description")
     image_url = data.get("image_url")
-    gender_restriction = data.get("gender_restriction", "all")
+    gender_restriction = data.get("gender_restriction", "everyone")
 
     if not name:
         return jsonify({"error": "Group name is required"}), 400
 
     if gender_restriction not in VALID_GENDER_RESTRICTIONS:
-        return jsonify({"error": "Invalid gender_restriction. Must be 'all', 'male', or 'female'"}), 400
+        return jsonify({"error": "Invalid gender_restriction. Must be 'everyone', 'only-male', or 'only-female'"}), 400
 
     if Groups.query.filter_by(name=name).first():
         return jsonify({"error": "Group name already exists"}), 409
 
-    try:
+    try: 
         group = Groups(
             name=name,
             description=description,
