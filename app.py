@@ -870,7 +870,8 @@ def get_all_groups():
                     "email": group.creator.email
                 },
                 "members_count": group.members_count,
-                "is_member": user_id in [u.id for u in group.members],  # ✅ Track membership
+                "is_member": user_id in [u.id for u in group.members],
+                "gender_restriction": group.gender_restriction,  # ✅ added
                 "top_post": {
                     "id": top_post.id,
                     "text": top_post.text,
