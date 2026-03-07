@@ -260,6 +260,7 @@ class Post(db.Model):
     hashtags = db.relationship('Hashtag', secondary='post_hashtag', backref='posts')
     likes = db.relationship('Like', backref='post', lazy=True, cascade="all, delete-orphan")
     comments = db.relationship('Comment', backref='post', lazy=True, cascade="all, delete-orphan")
+    author = db.relationship('User', backref='posts', foreign_keys=[author_id])  # ✅ added
 
     __table_args__ = (
         db.Index('idx_post_created', 'created_at'),
@@ -843,15 +844,8 @@ def create_group():
 
 @app.route('/groups', methods=['GET'])
 def get_all_groups():
-    auth_header = request.headers.get("Authorization")
-    user_id = None
-    if auth_header:
-        token = auth_header.split(" ")[1]
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            user_id = payload.get("user_id")
-        except:
-            pass  # Ignore token errors for listing groups
+    current_user = get_current_user_from_token()
+    user_id = current_user.id if current_user else None
 
     try:
         groups = Groups.query.order_by(Groups.created_at.desc()).all()
@@ -871,11 +865,22 @@ def get_all_groups():
                 },
                 "members_count": group.members_count,
                 "is_member": user_id in [u.id for u in group.members],
-                "gender_restriction": group.gender_restriction,  # ✅ added
+                "gender_restriction": group.gender_restriction,
                 "top_post": {
                     "id": top_post.id,
                     "text": top_post.text,
-                    "likes": len(top_post.likes)
+                    "post_type": top_post.post_type,
+                    "media_url": top_post.media_url,
+                    "created_at": top_post.created_at.isoformat(),
+                    "is_deleted": top_post.is_deleted,
+                    "group_id": top_post.group_id,
+                    "likes_count": len(top_post.likes),
+                    "comments_count": len(top_post.comments),
+                    "hashtags": [h.name for h in top_post.hashtags],
+                    "author": {
+                        "id": top_post.author.id,
+                        "email": top_post.author.email,
+                    }
                 } if top_post else None,
                 "created_at": group.created_at.isoformat()
             })
