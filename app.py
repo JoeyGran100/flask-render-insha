@@ -352,6 +352,7 @@ class Groups(db.Model):
     name = db.Column(db.String(100), nullable=False, unique=True)
     description = db.Column(db.Text)
     image_url = db.Column(db.String(255))
+    gender_restriction = db.Column(db.String(10), default="all", nullable=False)  # "all", "male", "female"
 
     creator_id = db.Column(
         db.Integer,
@@ -364,15 +365,25 @@ class Groups(db.Model):
     creator = db.relationship('User', backref='created_groups')
     members = db.relationship(
         'User',
-        secondary=group_members,   # ✅ FIX
+        secondary=group_members,
         backref='groups'
     )
-
     posts = db.relationship('Post', backref='group', lazy=True)
 
     @property
     def members_count(self):
         return len(self.members)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "image_url": self.image_url,
+            "members_count": self.members_count,
+            "gender_restriction": self.gender_restriction,
+            "created_at": self.created_at.isoformat(),
+        }
 
 
 with app.app_context():
@@ -772,8 +783,8 @@ def toggle_like(post_id):
 # MAKE SOCIAL MEDIA POSTS -> END
 
 # CREATE A GROUP -> START
+VALID_GENDER_RESTRICTIONS = {"all", "male", "female"}
 
-    
 @app.route('/groups', methods=['POST'])
 def create_group():
     current_user = get_current_user_from_token()
@@ -782,9 +793,13 @@ def create_group():
     name = data.get("name")
     description = data.get("description")
     image_url = data.get("image_url")
+    gender_restriction = data.get("gender_restriction", "all")
 
     if not name:
         return jsonify({"error": "Group name is required"}), 400
+
+    if gender_restriction not in VALID_GENDER_RESTRICTIONS:
+        return jsonify({"error": "Invalid gender_restriction. Must be 'all', 'male', or 'female'"}), 400
 
     if Groups.query.filter_by(name=name).first():
         return jsonify({"error": "Group name already exists"}), 409
@@ -794,6 +809,7 @@ def create_group():
             name=name,
             description=description,
             image_url=image_url,
+            gender_restriction=gender_restriction,
             creator_id=current_user.id
         )
 
@@ -816,6 +832,7 @@ def create_group():
             "description": group.description,
             "image_url": group.image_url,
             "creator_id": group.creator_id,
+            "gender_restriction": group.gender_restriction,
             "members_count": group.members_count,
             "created_at": group.created_at.isoformat()
         }
