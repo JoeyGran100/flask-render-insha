@@ -794,7 +794,7 @@ def create_group():
     name = data.get("name")
     description = data.get("description")
     image_url = data.get("image_url")
-    gender_restriction = data.get("gender_restriction", "Everyone")
+    gender_restriction = data.get("gender_restriction")
 
     if not name:
         return jsonify({"error": "Group name is required"}), 400
