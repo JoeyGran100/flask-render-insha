@@ -354,8 +354,8 @@ class Groups(db.Model):
     name = db.Column(db.String(100), nullable=False, unique=True)
     description = db.Column(db.Text)
     image_url = db.Column(db.String(255))
-    gender_restriction = db.Column(db.String(10), default="all", nullable=False)  # "all", "male", "female"
-
+    gender_restriction = db.Column(db.String(50), default="all", nullable=False)  # "all", "male", "female"
+    
     creator_id = db.Column(
         db.Integer,
         db.ForeignKey('userdetails.id'),
@@ -372,7 +372,7 @@ class Groups(db.Model):
     )
     posts = db.relationship('Post', backref='group', lazy=True)
 
-    @property
+    @property 
     def members_count(self):
         return len(self.members)
 
