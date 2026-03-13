@@ -2326,6 +2326,14 @@ def get_image(user_auth_id):
 @app.route('/locationInfo', methods=['POST'])
 def postLocationInfo():
     try:
+        user = get_current_user_from_token()
+        if not user:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        profile = UserProfile.query.filter_by(user_auth_id=user.id).first()
+        if not profile:
+            return jsonify({'error': 'UserProfile not found'}), 404
+
         data = request.get_json()
         print("POST /locationInfo received:", data)
 
@@ -2364,7 +2372,6 @@ def postLocationInfo():
 
         # ===== OTHER FIELDS =====
         try:
-
             lat = data.get('lat')
             lng = data.get('lng')
             totalPrice = data.get('totalPrice')
