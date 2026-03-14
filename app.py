@@ -312,6 +312,7 @@ class Like(db.Model):
         ),
     )
     
+    
 
 class Follow(db.Model):
     __tablename__ = 'follow'
