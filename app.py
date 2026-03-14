@@ -295,12 +295,16 @@ class Hashtag(db.Model):
 class Like(db.Model):
     __tablename__ = 'like'
 
-    user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=True)
     comment_id = db.Column(db.Integer, db.ForeignKey('comment.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     __table_args__ = (
+        # Composite PK: one like per user per post, and one like per user per comment
+        db.PrimaryKeyConstraint('user_id', 'post_id', 'comment_id', name='pk_like'),
+
+        # Still enforce that it targets either a post OR a comment, never both/neither
         db.CheckConstraint(
             '(post_id IS NOT NULL AND comment_id IS NULL) OR '
             '(post_id IS NULL AND comment_id IS NOT NULL)',
