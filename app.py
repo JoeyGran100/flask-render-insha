@@ -295,7 +295,8 @@ class Hashtag(db.Model):
 class Like(db.Model):
     __tablename__ = 'like'
 
-    user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=True)
     comment_id = db.Column(db.Integer, db.ForeignKey('comment.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -306,6 +307,8 @@ class Like(db.Model):
             '(post_id IS NULL AND comment_id IS NOT NULL)',
             name='like_on_post_or_comment'
         ),
+        db.UniqueConstraint('user_id', 'post_id', name='unique_user_post_like'),
+        db.UniqueConstraint('user_id', 'comment_id', name='unique_user_comment_like'),
     )
     
 
