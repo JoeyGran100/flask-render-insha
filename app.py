@@ -981,13 +981,7 @@ def leave_group(group_id):
 
 @app.route("/like", methods=["POST"])
 def create_like():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        return jsonify({"error": "Missing authorization"}), 401
-
-    token = auth_header.split(" ")[1]
-    payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-    user_id = payload.get("user_id")
+    current_user = get_current_user_from_token()
 
     data = request.json
     post_id = data.get("post_id")
@@ -995,7 +989,7 @@ def create_like():
         return jsonify({"error": "post_id is required"}), 400
 
     try:
-        new_like = Like(user_id=user_id, post_id=post_id)
+        new_like = Like(user_id=current_user.id, post_id=post_id)
         db.session.add(new_like)
         db.session.commit()
     except IntegrityError:
@@ -1003,48 +997,29 @@ def create_like():
         return jsonify({"message": "Post already liked"}), 200
 
     return jsonify({
-        "user_id": user_id,
+        "user_id": current_user.id,
         "post_id": post_id,
         "created_at": new_like.created_at.isoformat()
     }), 201
-     
-    
+
+
 @app.route("/like/<int:post_id>", methods=["DELETE"])
 def delete_like(post_id):
-    # Get JWT token from Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        return jsonify({"error": "Missing authorization"}), 401
+    current_user = get_current_user_from_token()
 
-    parts = auth_header.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        return jsonify({"error": "Invalid authorization header"}), 401
-
-    token = parts[1]
-
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id = payload.get("user_id")
-    except jwt.ExpiredSignatureError:
-        return jsonify({"error": "Token expired"}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Invalid token"}), 401
-
-    # Find the like
     existing_like = Like.query.filter_by(
-        user_id=user_id,
+        user_id=current_user.id,
         post_id=post_id
     ).first()
 
     if not existing_like:
         return jsonify({"message": "Like does not exist"}), 404
 
-    # Delete the like
     db.session.delete(existing_like)
     db.session.commit()
 
     return jsonify({
-        "user_id": user_id,
+        "user_id": current_user.id,
         "post_id": post_id,
         "message": "Like removed"
     }), 200
