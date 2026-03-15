@@ -542,11 +542,22 @@ def get_all_posts():
             comment_map[c.parent_id]["replies"].append(node)
         elif not c.parent_id:
             post_root_comments[c.post_id].append(node)
+    
+            
+    # ── 6. Batch-fetch follow statuses for all post authors ──────────────────
+    post_author_ids = [p.author_id for p in posts]
+    followed_ids = {
+        f.following_id
+        for f in Follow.query.filter(
+            Follow.follower_id == current_user.id,
+            Follow.following_id.in_(post_author_ids)
+        ).all()
+    }
 
-    # ── 6. Attach comments to each serialized post ───────────────────────────
+    # ── 7. Attach comments to each serialized post ───────────────────────────
     serialized_posts = []
     for post in posts:
-        p = serialize_post(post, current_user)
+        p = serialize_post(post, current_user, is_following=post.author_id in followed_ids)
         p["comments"] = post_root_comments.get(post.id, [])
         p["comment_count"] = len(p["comments"])
         serialized_posts.append(p)
@@ -581,7 +592,7 @@ def get_my_posts():
     }), 200
 
 
-def serialize_post(post: Post, current_user=None):
+def serialize_post(post: Post, current_user=None, is_following: bool = False):
     profile = UserProfile.query.filter_by(user_auth_id=post.author_id).first()
     user_image = UserImages.query.filter_by(user_auth_id=post.author_id).first()
     like_count = Like.query.filter_by(post_id=post.id).count()
@@ -603,7 +614,8 @@ def serialize_post(post: Post, current_user=None):
         "is_deleted": post.is_deleted,
         "hashtags": [tag.name for tag in post.hashtags],
         "like_count": like_count,
-        "user_liked": user_liked
+        "user_liked": user_liked,
+        "is_following": is_following   # ← added
     }
     
 
@@ -1066,7 +1078,8 @@ def follow_user():
 
     return jsonify({
         "follower_id": current_user.id,
-        "following_id": following_id
+        "following_id": following_id,
+        "is_following": True        # ← just confirms the action result
     }), 201
 
     
@@ -1091,6 +1104,7 @@ def unfollow_user(following_id):
     return jsonify({
         "follower_id": current_user.id,
         "following_id": following_id,
+        "is_following": False,      # ← just confirms the action result
         "message": "Unfollowed successfully"
     }), 200
 
