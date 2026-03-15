@@ -1043,26 +1043,19 @@ def delete_like(post_id):
 
 @app.route('/follow', methods=['POST'])
 def follow_user():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        return jsonify({"error": "Missing authorization"}), 401
-
-    token = auth_header.split(" ")[1]
-    payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-    follower_id = payload.get("user_id")
+    current_user = get_current_user_from_token()
 
     data = request.json
     following_id = data.get("following_id")
     if not following_id:
         return jsonify({"error": "following_id is required"}), 400
 
-    # ✅ ADD SELF-FOLLOW CHECK HERE
-    if follower_id == following_id:
+    if current_user.id == following_id:
         return jsonify({"error": "You cannot follow yourself"}), 400
 
     try:
         follow = Follow(
-            follower_id=follower_id,
+            follower_id=current_user.id,
             following_id=following_id
         )
         db.session.add(follow)
@@ -1072,30 +1065,20 @@ def follow_user():
         return jsonify({"message": "Already following"}), 200
 
     return jsonify({
-        "follower_id": follower_id,
+        "follower_id": current_user.id,
         "following_id": following_id
     }), 201
 
     
 @app.route('/unfollow/<int:following_id>', methods=['DELETE'])
 def unfollow_user(following_id):
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        return jsonify({"error": "Missing authorization"}), 401
+    current_user = get_current_user_from_token()
 
-    try:
-        token = auth_header.split(" ")[1]
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        follower_id = payload.get("user_id")
-    except Exception:
-        return jsonify({"error": "Invalid token"}), 401
-
-    # ✅ Self-check
-    if follower_id == following_id:
+    if current_user.id == following_id:
         return jsonify({"error": "You cannot unfollow yourself"}), 400
 
     follow = Follow.query.filter_by(
-        follower_id=follower_id,
+        follower_id=current_user.id,
         following_id=following_id
     ).first()
 
@@ -1106,11 +1089,10 @@ def unfollow_user(following_id):
     db.session.commit()
 
     return jsonify({
-        "follower_id": follower_id,
+        "follower_id": current_user.id,
         "following_id": following_id,
         "message": "Unfollowed successfully"
     }), 200
-
 
 # FOLLOW USERS -> END
 
