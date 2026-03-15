@@ -20,7 +20,7 @@ from flask_migrate import Migrate
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp9_render_example_user:KDxvhH4LjotMcDx4m7rD879tchTLOm7N@dpg-d6hh587kijhs73fgkch0-a.frankfurt-postgres.render.com/inshaapp9_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp10_render_example_user:oaDIYQUJxqVvNXIeJlJxxlhEF85qmUd5@dpg-d6r7v4ndiees73c3o5o0-a.frankfurt-postgres.render.com/inshaapp10_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)  # 2️⃣ migrate second, now db exists
