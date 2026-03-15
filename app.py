@@ -553,6 +553,10 @@ def get_all_posts():
             Follow.following_id.in_(post_author_ids)
         ).all()
     }
+    
+    print(f"DEBUG current_user.id: {current_user.id}")
+    print(f"DEBUG post_author_ids: {post_author_ids}")
+    print(f"DEBUG followed_ids: {followed_ids}")
 
     # ── 7. Attach comments to each serialized post ───────────────────────────
     serialized_posts = []
