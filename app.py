@@ -982,23 +982,35 @@ def leave_group(group_id):
 @app.route("/like", methods=["POST"])
 def create_like():
     current_user = get_current_user_from_token()
+    if not current_user:
+        return jsonify({"error": "Unauthorized or token expired"}), 401
 
     data = request.json
     post_id = data.get("post_id")
-    if not post_id:
-        return jsonify({"error": "post_id is required"}), 400
+    comment_id = data.get("comment_id")
+
+    # ✅ Must have one, but not both
+    if not post_id and not comment_id:
+        return jsonify({"error": "Either post_id or comment_id is required"}), 400
+    if post_id and comment_id:
+        return jsonify({"error": "Cannot like both a post and comment at the same time"}), 400
 
     try:
-        new_like = Like(user_id=current_user.id, post_id=post_id)
+        new_like = Like(
+            user_id=current_user.id,
+            post_id=post_id,
+            comment_id=comment_id
+        )
         db.session.add(new_like)
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        return jsonify({"message": "Post already liked"}), 200
+        return jsonify({"message": "Already liked"}), 200
 
     return jsonify({
         "user_id": current_user.id,
         "post_id": post_id,
+        "comment_id": comment_id,
         "created_at": new_like.created_at.isoformat()
     }), 201
 
