@@ -1136,6 +1136,7 @@ def report_post():
     current_user = get_current_user_from_token()
 
     data = request.json
+    print("REPORT REQUEST DATA:", data)  # ✅ add here
     post_id = data.get("post_id")
     reason = data.get("reason")
     reported_user_id = data.get("reported_user_id")  # ✅ added
