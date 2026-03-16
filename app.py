@@ -1133,25 +1133,12 @@ def feed(user_id):
 
 @app.route('/report', methods=['POST'])
 def report_post():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        return jsonify({"error": "Missing authorization"}), 401
-
-    token = auth_header.split(" ")[1]
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-    except jwt.ExpiredSignatureError:
-        return jsonify({"error": "Token expired"}), 401
-    except jwt.InvalidTokenError:
-        return jsonify({"error": "Invalid token"}), 401
-
-    reporter_id = payload.get("user_id")
-    if not reporter_id:
-        return jsonify({"error": "Invalid token payload"}), 401
+    current_user = get_current_user_from_token()
 
     data = request.json
     post_id = data.get("post_id")
     reason = data.get("reason")
+    reported_user_id = data.get("reported_user_id")  # ✅ added
 
     if not post_id or not reason:
         return jsonify({"error": "post_id and reason are required"}), 400
@@ -1163,9 +1150,10 @@ def report_post():
 
     try:
         report = Report(
-            reporter_id=reporter_id,
+            reporter_id=current_user.id,
             post_id=post_id,
-            reason=reason
+            reason=reason,
+            reported_user_id=reported_user_id  # ✅ added
         )
         db.session.add(report)
         db.session.commit()
@@ -1177,8 +1165,9 @@ def report_post():
 
     return jsonify({
         "status": "reported",
-        "reporter_id": reporter_id,
-        "post_id": post_id
+        "reporter_id": current_user.id,
+        "post_id": post_id,
+        "reported_user_id": reported_user_id  # ✅ added
     }), 201
 
 
