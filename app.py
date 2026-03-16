@@ -331,6 +331,7 @@ class Report(db.Model):
     reporter_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('post.id'), nullable=True)
     comment_id = db.Column(db.Integer, db.ForeignKey('comment.id'), nullable=True)
+    reported_user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=True)
     reason = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
@@ -340,7 +341,7 @@ class Report(db.Model):
             '(post_id IS NULL AND comment_id IS NOT NULL)',
             name='report_on_post_or_comment'
         ),
-    )   
+    )
     
 
 # 1️⃣ Association table MUST come first
