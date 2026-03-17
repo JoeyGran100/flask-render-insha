@@ -414,7 +414,7 @@ def get_comments(post_id):
 @app.route('/event-hosts', methods=['GET'])
 def get_all_event_hosts():
     try:
-        hosts = EventHost.query.order_by(EventHost.id.desc()).all()
+        hosts = EventHost.query.order_by(EventHost.id.asc()).all()
         results = [{"id": host.id, "name": host.name} for host in hosts]
         return jsonify(results), 200
 
