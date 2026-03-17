@@ -413,10 +413,6 @@ def get_comments(post_id):
     
 @app.route('/event-hosts', methods=['GET'])
 def get_all_event_hosts():
-    current_user = get_current_user_from_token()
-    if not current_user:
-        return jsonify({"error": "unauthorized"}), 401
-
     try:
         hosts = EventHost.query.order_by(EventHost.id.desc()).all()
         results = [{"id": host.id, "name": host.name} for host in hosts]
@@ -424,9 +420,9 @@ def get_all_event_hosts():
 
     except Exception as e:
         logger.error("Fatal error in GET /event-hosts", exc_info=True)
-        return jsonify({"error": "internal_server_error"}), 500    
+        return jsonify({"error": "internal_server_error"}), 500
+    
 #EVENT HOSTS -> END
-
 
 # MAKE SOCIAL MEDIA POSTS -> Start
 
