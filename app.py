@@ -2660,7 +2660,7 @@ def attend_location():
     profile = UserProfile.query.filter_by(user_auth_id=user_id).first()
 
     if not location:
-        return jsonify({'message': 'Invalid location'}), 404
+        return jsonify({'message': 'Invalid location'}), 404 
 
     if not profile or not profile.gender:
         return jsonify({'message': 'User profile or gender not set'}), 400
