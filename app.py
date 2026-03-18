@@ -2684,6 +2684,10 @@ def attend_location():
 
 @app.route('/attend', methods=['GET'])
 def get_attendance():
+    user = get_current_user_from_token()
+    if not user:
+        return jsonify({'message': 'Unauthorized'}), 401
+
     location_id = request.args.get('location_id')
     if not location_id:
         return jsonify({'message': 'location_id is required'}), 400
@@ -2696,13 +2700,13 @@ def get_attendance():
 
     attendee_list = []
     for attendance in attendances:
-        user = User.query.get(attendance.user_id)
-        profile = getattr(user, 'user_data', None)
-        checked_in = CheckIn.query.filter_by(user_id=user.id, location_id=location.id).first() is not None
+        attendee_user = User.query.get(attendance.user_id)
+        profile = UserProfile.query.filter_by(user_auth_id=attendee_user.id).first()
+        checked_in = CheckIn.query.filter_by(user_id=attendee_user.id, location_id=location.id).first() is not None
 
         attendee_list.append({
-            'user_id': user.id,
-            'email': user.email,
+            'user_id': attendee_user.id,
+            'email': attendee_user.email,
             'gender': profile.gender if profile else None,
             'attending_at': attendance.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
             'checked_in': checked_in,
@@ -2723,10 +2727,61 @@ def get_attendance():
     }), 200
 
 
-@app.route('/attendances/<int:user_id>/<int:location_id>', methods=['GET'])
-def get_user_attendance_for_location(user_id, location_id):
-    record = Attendance.query.filter_by(user_id=user_id, location_id=location_id).first()
+@app.route('/attendances/<int:location_id>', methods=['GET'])
+def get_user_attendance_for_location(location_id):
+    user = get_current_user_from_token()
+    if not user:
+        return jsonify({'message': 'Unauthorized'}), 401
+
+    record = Attendance.query.filter_by(user_id=user.id, location_id=location_id).first()
     return jsonify({'hasAttended': record.hasAttended if record else False})
+
+
+# @app.route('/attend', methods=['GET'])
+# def get_attendance():
+#     location_id = request.args.get('location_id')
+#     if not location_id:
+#         return jsonify({'message': 'location_id is required'}), 400
+
+#     location = LocationInfo.query.get(location_id)
+#     if not location:
+#         return jsonify({'message': 'Location not found'}), 404
+
+#     attendances = Attendance.query.filter_by(location_id=location.id).all()
+
+#     attendee_list = []
+#     for attendance in attendances:
+#         user = User.query.get(attendance.user_id)
+#         profile = getattr(user, 'user_data', None)
+#         checked_in = CheckIn.query.filter_by(user_id=user.id, location_id=location.id).first() is not None
+
+#         attendee_list.append({
+#             'user_id': user.id,
+#             'email': user.email,
+#             'gender': profile.gender if profile else None,
+#             'attending_at': attendance.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+#             'checked_in': checked_in,
+#             'hasAttended': attendance.hasAttended
+#         })
+
+#     total_attendees = (location.maleAttendees or 0) + (location.femaleAttendees or 0)
+
+#     return jsonify({
+#         'location': location.location,
+#         'date': location.date,
+#         'time': location.time,
+#         'maleAttendees': location.maleAttendees or 0,
+#         'femaleAttendees': location.femaleAttendees or 0,
+#         'totalAttendees': total_attendees,
+#         'maxAttendees': location.maxAttendees or 0,
+#         'attendees': attendee_list
+#     }), 200
+
+
+# @app.route('/attendances/<int:user_id>/<int:location_id>', methods=['GET'])
+# def get_user_attendance_for_location(user_id, location_id):
+#     record = Attendance.query.filter_by(user_id=user_id, location_id=location_id).first()
+#     return jsonify({'hasAttended': record.hasAttended if record else False})
 
 # CHECK-IN AND ATTENDANCE -> End
 
