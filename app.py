@@ -2604,21 +2604,63 @@ def check_checkin():
         return jsonify({'checked_in': False}), 200
 
 
+# @app.route('/attend', methods=['POST'])
+# def attend_location():
+#     data = request.get_json()
+#     user_id = data.get('user_id')
+#     location_id = data.get('location_id')
+
+#     if not user_id or not location_id:
+#         return jsonify({'message': 'Missing user_id or location_id'}), 400
+
+#     user = User.query.get(user_id)
+#     location = LocationInfo.query.get(location_id)
+#     profile = UserProfile.query.filter_by(user_auth_id=user_id).first()
+
+#     if not user or not location:
+#         return jsonify({'message': 'Invalid user or location'}), 404
+
+#     if not profile or not profile.gender:
+#         return jsonify({'message': 'User profile or gender not set'}), 400
+
+#     if Attendance.query.filter_by(user_id=user_id, location_id=location_id).first():
+#         return jsonify({'message': 'User already marked as attending'}), 400
+
+#     # ✅ Mark attendance with hasAttended = True
+#     attendance = Attendance(user_id=user_id, location_id=location_id, hasAttended=True)
+#     db.session.add(attendance)
+
+#     # Update gender-based counts
+#     gender = profile.gender.lower()
+#     if gender.lower() in ['men', 'man', 'male']:
+#         location.maleAttendees = (location.maleAttendees or 0) + 1
+#     elif gender.lower() in ['women', 'woman', 'female']:
+#         location.femaleAttendees = (location.femaleAttendees or 0) + 1
+
+#     db.session.commit()
+
+#     return jsonify({'message': 'User marked as attending and counts updated'}), 200
+
 @app.route('/attend', methods=['POST'])
 def attend_location():
+    user = get_current_user_from_token()  # ← get user from token
+    
+    if not user:
+        return jsonify({'message': 'Unauthorized'}), 401
+    
+    user_id = user.id  # ← extract id from the returned user object
+
     data = request.get_json()
-    user_id = data.get('user_id')
     location_id = data.get('location_id')
 
-    if not user_id or not location_id:
-        return jsonify({'message': 'Missing user_id or location_id'}), 400
+    if not location_id:
+        return jsonify({'message': 'Missing location_id'}), 400
 
-    user = User.query.get(user_id)
     location = LocationInfo.query.get(location_id)
     profile = UserProfile.query.filter_by(user_auth_id=user_id).first()
 
-    if not user or not location:
-        return jsonify({'message': 'Invalid user or location'}), 404
+    if not location:
+        return jsonify({'message': 'Invalid location'}), 404
 
     if not profile or not profile.gender:
         return jsonify({'message': 'User profile or gender not set'}), 400
@@ -2626,15 +2668,13 @@ def attend_location():
     if Attendance.query.filter_by(user_id=user_id, location_id=location_id).first():
         return jsonify({'message': 'User already marked as attending'}), 400
 
-    # ✅ Mark attendance with hasAttended = True
     attendance = Attendance(user_id=user_id, location_id=location_id, hasAttended=True)
     db.session.add(attendance)
 
-    # Update gender-based counts
     gender = profile.gender.lower()
-    if gender.lower() in ['men', 'man', 'male']:
+    if gender in ['men', 'man', 'male']:
         location.maleAttendees = (location.maleAttendees or 0) + 1
-    elif gender.lower() in ['women', 'woman', 'female']:
+    elif gender in ['women', 'woman', 'female']:
         location.femaleAttendees = (location.femaleAttendees or 0) + 1
 
     db.session.commit()
