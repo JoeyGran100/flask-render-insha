@@ -3073,6 +3073,7 @@ def get_user_matches_for_location(location_id):
 
             other_user_data = UserProfile.query.filter_by(user_auth_id=matched_user_id).first()
             other_user_info = UserInfo.query.filter_by(user_profile_id=other_user_data.id).first()
+            other_user_character = UserCharacter.query.filter_by(user_profile_id=other_user_data.id).first()  # ← add this
 
             result.append({
                 'user_id': matched_user_id,
@@ -3089,7 +3090,12 @@ def get_user_matches_for_location(location_id):
                 'status': match.status,
                 'location': match.location_id,
                 'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
-                'visible_after': match.visible_after
+                'visible_after': match.visible_after,
+                
+                'muslimstatus': other_user_character.muslimstatus if other_user_character else None,
+                'practicing': other_user_character.practicing if other_user_character else None,
+                'nationality': other_user_character.nationality if other_user_character else None,
+                'personality_type': other_user_character.personality_type if other_user_character else None,
             })
 
         if len(result) == 0:
