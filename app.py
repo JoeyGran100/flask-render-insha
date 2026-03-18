@@ -2526,69 +2526,176 @@ def get_user_tickets():
 # CHECK-IN AND ATTENDANCE -> Start
 
 # ✅ Route: Perform check-in
+# @app.route('/checkin', methods=['POST'])
+# def checkin():
+#     data = request.get_json()
+#     user_id = data.get('user_id')
+#     location_id = data.get('location_id')
+
+#     if not user_id or not location_id:
+#         return jsonify({'message': 'user_id and location_id are required'}), 400
+
+#     # Validate location
+#     user = User.query.get(user_id)
+#     location = LocationInfo.query.get(location_id)
+#     if not user or not location:
+#         return jsonify({'message': 'Invalid location or Id'}), 404
+
+#     # User must have marked attendance first
+#     attendance = Attendance.query.filter_by(user_id=user_id, location_id=location_id).first()
+#     if not attendance:
+#         return jsonify({'message': 'User must attend before check-in'}), 403
+
+#     # Check if already checked in
+#     existing_checkin = CheckIn.query.filter_by(user_id=user_id, location_id=location_id).first()
+#     if existing_checkin:
+#         return jsonify({'message': 'User already checked in'}), 400
+
+#     # Validate if check-in already closed for this location # Work: 41410282
+#     if location.checkin_closed:  # Work: 41410282
+#         return jsonify({'message': 'Check-in is closed for this event'}), 400  # Work: 41410282
+
+#     # Slot Limit Enforcement
+#     checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
+#     if checkin_count >= location.maxAttendees and not location.checkin_closed:  # Checks for the limit and if checkin is not closed to avoid duplicate matches
+#         location.checkin_closed = True  # Work: 41410282
+#         db.session.commit()  # Work: 41410282
+#         trigger_matchmaking_for_location(location_id)  # Work: 41410282
+#         return jsonify({'message': f'All {location.maxAttendees} slots are filled'}), 400
+
+#     # Time-Based Restrictions (10 minutes after event time)
+#     try:
+#         event_time = datetime.strptime(f"{location.date} {location.time}", "%Y-%m-%d %H:%M")
+#         current_time = datetime.now()
+#         time_diff = (current_time - event_time).total_seconds()
+
+#         if time_diff > 600:
+#             location.checkin_closed = True  # Work: 41410282
+#             db.session.commit()  # Work: 41410282
+#             # Trigger matchmaking when time expires (even if slots aren't full)
+#             trigger_matchmaking_for_location(location_id)
+#             return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
+#     except Exception as e:
+#         print(f"Error parsing event time: {str(e)}")
+
+#     # Create check-in
+#     new_checkin = CheckIn(user_id=user_id, location_id=location_id)
+#     db.session.add(new_checkin)
+#     db.session.commit()
+
+#     # Check if this check-in completes the slots or triggers end phase
+#     updated_checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
+#     if updated_checkin_count >= location.maxAttendees:
+#         location.checkin_closed = True  # Work: 41410282
+#         db.session.commit()  # Work: 41410282
+#         # All slots filled - trigger automatic matchmaking
+#         trigger_matchmaking_for_location(location_id)
+
+#     return jsonify({
+#         'message': 'Check-in successful',
+#         'user_id': user_id,
+#         'location_id': location_id,
+#         'timestamp': new_checkin.timestamp.isoformat(),
+#         'checkin_status': f"{updated_checkin_count}/{location.maxAttendees} checked in"
+#     }), 200
+
+
+# @app.route('/checkin', methods=['GET'])
+# def check_checkin():
+#     user_id = request.args.get('user_id')
+#     location_id = request.args.get('location_id')
+
+#     if not user_id or not location_id:
+#         return jsonify({'message': 'Missing user_id or location_id'}), 400
+
+#     checkin = CheckIn.query.filter_by(user_id=user_id, location_id=location_id).first()
+
+#     if checkin:
+#         location = checkin.location
+
+#         # Count total check-ins at this location
+#         checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
+#         max_attendees = location.maxAttendees
+
+#     if checkin:
+#         location = checkin.location
+#         return jsonify({
+#             'checked_in': True,
+#             'timestamp': checkin.timestamp,
+#             'checkin_status': f"{checkin_count}/{max_attendees} checked in",
+#             'location': {
+#                 'id': location.id,
+#                 'location': location.location,
+#                 'date': location.date,
+#                 'time': location.time,
+#                 'lat': location.lat,
+#                 'lng': location.lng,
+#                 'event_type': location.event_type,
+#                 'maxAttendees': location.maxAttendees,
+#                 'maleAttendees': location.maleAttendees,
+#                 'femaleAttendees': location.femaleAttendees,
+#                 'totalPrice': location.totalPrice
+#             }
+#         }), 200
+#     else:
+#         return jsonify({'checked_in': False}), 200
+
 @app.route('/checkin', methods=['POST'])
 def checkin():
+    user = get_current_user_from_token()
+    if not user:
+        return jsonify({'message': 'Unauthorized'}), 401
+
+    user_id = user.id
     data = request.get_json()
-    user_id = data.get('user_id')
     location_id = data.get('location_id')
 
-    if not user_id or not location_id:
-        return jsonify({'message': 'user_id and location_id are required'}), 400
+    if not location_id:
+        return jsonify({'message': 'location_id is required'}), 400
 
-    # Validate location
-    user = User.query.get(user_id)
     location = LocationInfo.query.get(location_id)
-    if not user or not location:
+    if not location:
         return jsonify({'message': 'Invalid location or Id'}), 404
 
-    # User must have marked attendance first
     attendance = Attendance.query.filter_by(user_id=user_id, location_id=location_id).first()
     if not attendance:
         return jsonify({'message': 'User must attend before check-in'}), 403
 
-    # Check if already checked in
     existing_checkin = CheckIn.query.filter_by(user_id=user_id, location_id=location_id).first()
     if existing_checkin:
         return jsonify({'message': 'User already checked in'}), 400
 
-    # Validate if check-in already closed for this location # Work: 41410282
-    if location.checkin_closed:  # Work: 41410282
-        return jsonify({'message': 'Check-in is closed for this event'}), 400  # Work: 41410282
+    if location.checkin_closed:
+        return jsonify({'message': 'Check-in is closed for this event'}), 400
 
-    # Slot Limit Enforcement
     checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
-    if checkin_count >= location.maxAttendees and not location.checkin_closed:  # Checks for the limit and if checkin is not closed to avoid duplicate matches
-        location.checkin_closed = True  # Work: 41410282
-        db.session.commit()  # Work: 41410282
-        trigger_matchmaking_for_location(location_id)  # Work: 41410282
+    if checkin_count >= location.maxAttendees and not location.checkin_closed:
+        location.checkin_closed = True
+        db.session.commit()
+        trigger_matchmaking_for_location(location_id)
         return jsonify({'message': f'All {location.maxAttendees} slots are filled'}), 400
 
-    # Time-Based Restrictions (10 minutes after event time)
     try:
         event_time = datetime.strptime(f"{location.date} {location.time}", "%Y-%m-%d %H:%M")
         current_time = datetime.now()
         time_diff = (current_time - event_time).total_seconds()
 
         if time_diff > 600:
-            location.checkin_closed = True  # Work: 41410282
-            db.session.commit()  # Work: 41410282
-            # Trigger matchmaking when time expires (even if slots aren't full)
+            location.checkin_closed = True
+            db.session.commit()
             trigger_matchmaking_for_location(location_id)
             return jsonify({'message': 'Check-in period has ended (10 minutes after event time)'}), 400
     except Exception as e:
         print(f"Error parsing event time: {str(e)}")
 
-    # Create check-in
     new_checkin = CheckIn(user_id=user_id, location_id=location_id)
     db.session.add(new_checkin)
     db.session.commit()
 
-    # Check if this check-in completes the slots or triggers end phase
     updated_checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
     if updated_checkin_count >= location.maxAttendees:
-        location.checkin_closed = True  # Work: 41410282
-        db.session.commit()  # Work: 41410282
-        # All slots filled - trigger automatic matchmaking
+        location.checkin_closed = True
+        db.session.commit()
         trigger_matchmaking_for_location(location_id)
 
     return jsonify({
@@ -2602,23 +2709,23 @@ def checkin():
 
 @app.route('/checkin', methods=['GET'])
 def check_checkin():
-    user_id = request.args.get('user_id')
+    user = get_current_user_from_token()
+    if not user:
+        return jsonify({'message': 'Unauthorized'}), 401
+
+    user_id = user.id
     location_id = request.args.get('location_id')
 
-    if not user_id or not location_id:
-        return jsonify({'message': 'Missing user_id or location_id'}), 400
+    if not location_id:
+        return jsonify({'message': 'Missing location_id'}), 400
 
     checkin = CheckIn.query.filter_by(user_id=user_id, location_id=location_id).first()
 
     if checkin:
         location = checkin.location
-
-        # Count total check-ins at this location
         checkin_count = CheckIn.query.filter_by(location_id=location_id).count()
         max_attendees = location.maxAttendees
 
-    if checkin:
-        location = checkin.location
         return jsonify({
             'checked_in': True,
             'timestamp': checkin.timestamp,
@@ -2630,7 +2737,6 @@ def check_checkin():
                 'time': location.time,
                 'lat': location.lat,
                 'lng': location.lng,
-                'event_type': location.event_type,
                 'maxAttendees': location.maxAttendees,
                 'maleAttendees': location.maleAttendees,
                 'femaleAttendees': location.femaleAttendees,
