@@ -2448,12 +2448,49 @@ def getLocationInfo():
 
 # TICKETS -> Start
 
+# @app.route('/my_tickets', methods=['GET'])
+# def get_user_tickets():
+#     user_id = request.args.get('user_id')
+
+#     if not user_id:
+#         return jsonify({'message': 'user_id is required'}), 400
+
+#     attendances = Attendance.query.filter_by(user_id=user_id).all()
+#     tickets = []
+
+#     for attendance in attendances:
+#         location = LocationInfo.query.get(attendance.location_id)
+#         if not location:
+#             continue
+
+#         checked_in = has_user_checked_in(user_id, location.id)
+
+#         tickets.append({
+#             'location_id': location.id,
+#             'event_category': location.event_category.name if location.event_category else None,
+#             'event_category_id': location.event_category_id,
+#             'event_host': location.event_host.name if location.event_host else None,  # NEW
+#             'event_host_id': location.event_host_id,
+#             'description': location.description,  # NEW
+#             'matchmake': location.matchmake,      # NEW
+#             'date': location.date,
+#             'time': location.time,
+#             'location': location.location,
+#             'checked_in': checked_in,
+#             'maleAttendees': location.maleAttendees or 0,
+#             'femaleAttendees': location.femaleAttendees or 0,
+#             'maxAttendees': location.maxAttendees or 0
+#         })
+
+#     return jsonify({'tickets': tickets}), 200
+
 @app.route('/my_tickets', methods=['GET'])
 def get_user_tickets():
-    user_id = request.args.get('user_id')
+    user = get_current_user_from_token()
+    if not user:
+        return jsonify({'message': 'Unauthorized'}), 401
 
-    if not user_id:
-        return jsonify({'message': 'user_id is required'}), 400
+    user_id = user.id
 
     attendances = Attendance.query.filter_by(user_id=user_id).all()
     tickets = []
@@ -2469,10 +2506,10 @@ def get_user_tickets():
             'location_id': location.id,
             'event_category': location.event_category.name if location.event_category else None,
             'event_category_id': location.event_category_id,
-            'event_host': location.event_host.name if location.event_host else None,  # NEW
+            'event_host': location.event_host.name if location.event_host else None,
             'event_host_id': location.event_host_id,
-            'description': location.description,  # NEW
-            'matchmake': location.matchmake,      # NEW
+            'description': location.description,
+            'matchmake': location.matchmake,
             'date': location.date,
             'time': location.time,
             'location': location.location,
