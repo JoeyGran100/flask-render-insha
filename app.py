@@ -2930,16 +2930,105 @@ def get_user_attendance_for_location(location_id):
 
 # MATCHES FOR LOCATION -> Start
 
-@app.route('/matches_at_location/<int:user_id>/<int:location_id>', methods=['GET'])
-def get_user_matches_for_location(user_id, location_id):
-    try:
-        create_new_matches = request.args.get('create_new_matches')
+# @app.route('/matches_at_location/<int:user_id>/<int:location_id>', methods=['GET'])
+# def get_user_matches_for_location(user_id, location_id):
+#     try:
+#         create_new_matches = request.args.get('create_new_matches')
 
+#         if create_new_matches and create_new_matches == 'true':
+#             match_making_result = trigger_matchmaking_for_location(location_id)
+#             print(f"Match making at location result: {match_making_result}")
+
+#         # Query to get all existing active matches for a given user at a specific location
+#         existing_matches = (
+#             db.session.query(Match)
+#             .join(CheckIn, or_(
+#                 CheckIn.user_id == Match.user1_id,
+#                 CheckIn.user_id == Match.user2_id
+#             ))
+#             .filter(
+#                 or_(Match.user1_id == user_id, Match.user2_id == user_id),
+#                 Match.status == 'active',
+#                 Match.location_id == location_id
+#             )
+#             .order_by(desc(Match.visible_after))
+#             .all()
+#         )
+
+#         if len(existing_matches) == 0:
+#             return jsonify({'message': 'No matches left for this event'}), 400
+
+#         preferences = (UserPreference.query
+#                        .filter(
+#                             or_(UserPreference.user_id == user_id, UserPreference.preferred_user_id == user_id)
+#                        ).all())
+
+#         preference_pairs = set()
+#         for pref in preferences:
+#             preference_pairs.add((pref.user_id, pref.preferred_user_id))
+#             preference_pairs.add((pref.preferred_user_id, pref.user_id)) # Add reverse pair also
+
+#         # Format results with matches
+#         result = []
+#         for match in existing_matches:
+
+#             matched_user_id = int(
+#                 match.user2_id if match.user1_id == user_id else match.user1_id)  # get opposite match id
+
+#             # Checking if this match already has a preference available
+#             if (user_id, matched_user_id) in preference_pairs:
+#                 print(f"SKIPPING: Existing preference found")
+#                 continue
+
+#             # Get user image if available
+#             user_image = UserImages.query.filter_by(user_auth_id=matched_user_id).first()
+#             image_url = None
+#             if user_image and user_image.imageString:
+#                 image_url = f"/uploads/{user_image.imageString}"
+
+#             other_user_data = UserProfile.query.filter_by(user_auth_id=matched_user_id).first()
+
+#             result.append({
+#                 'user_id': matched_user_id,
+#                 'email': other_user_data.email,
+#                 'firstname': other_user_data.firstname,
+#                 'lastname': other_user_data.lastname,
+#                 'preferences': other_user_data.preferences,
+#                 'age': other_user_data.age,
+#                 'bio': other_user_data.bio,
+#                 'hobbies': other_user_data.hobbies,
+#                 'gender': other_user_data.gender,
+#                 'phone_number': other_user_data.phone_number,
+#                 'image_url': image_url,
+#                 'status': match.status,
+#                 'location': match.location_id,
+#                 'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
+#                 'visible_after': match.visible_after
+#             })
+
+#         if len(result) == 0:
+#             return jsonify({'message': 'No matches left for this event'}), 400
+
+#         return jsonify({'matches': result})
+
+#     except Exception as e:
+#         print(f"Error in get_user_matches: {str(e)}")
+#         return jsonify({'matches': []})
+
+@app.route('/matches_at_location/<int:location_id>', methods=['GET'])
+def get_user_matches_for_location(location_id):
+    try:
+        user = get_current_user_from_token()
+        if not user:
+            return jsonify({'message': 'Unauthorized'}), 401
+
+        user_id = user.id
+
+        create_new_matches = request.args.get('create_new_matches')
         if create_new_matches and create_new_matches == 'true':
             match_making_result = trigger_matchmaking_for_location(location_id)
             print(f"Match making at location result: {match_making_result}")
 
-        # Query to get all existing active matches for a given user at a specific location
         existing_matches = (
             db.session.query(Match)
             .join(CheckIn, or_(
@@ -2966,37 +3055,34 @@ def get_user_matches_for_location(user_id, location_id):
         preference_pairs = set()
         for pref in preferences:
             preference_pairs.add((pref.user_id, pref.preferred_user_id))
-            preference_pairs.add((pref.preferred_user_id, pref.user_id)) # Add reverse pair also
+            preference_pairs.add((pref.preferred_user_id, pref.user_id))
 
-        # Format results with matches
         result = []
         for match in existing_matches:
-
             matched_user_id = int(
-                match.user2_id if match.user1_id == user_id else match.user1_id)  # get opposite match id
+                match.user2_id if match.user1_id == user_id else match.user1_id)
 
-            # Checking if this match already has a preference available
             if (user_id, matched_user_id) in preference_pairs:
                 print(f"SKIPPING: Existing preference found")
                 continue
 
-            # Get user image if available
             user_image = UserImages.query.filter_by(user_auth_id=matched_user_id).first()
             image_url = None
             if user_image and user_image.imageString:
                 image_url = f"/uploads/{user_image.imageString}"
 
             other_user_data = UserProfile.query.filter_by(user_auth_id=matched_user_id).first()
+            other_user_info = UserInfo.query.filter_by(user_profile_id=other_user_data.id).first()
 
             result.append({
                 'user_id': matched_user_id,
                 'email': other_user_data.email,
                 'firstname': other_user_data.firstname,
                 'lastname': other_user_data.lastname,
-                'preferences': other_user_data.preferences,
+                'preferences': other_user_info.preferences if other_user_info else [],
                 'age': other_user_data.age,
-                'bio': other_user_data.bio,
-                'hobbies': other_user_data.hobbies,
+                'bio': other_user_info.bio if other_user_info else None,
+                'hobbies': other_user_info.hobbies if other_user_info else [],
                 'gender': other_user_data.gender,
                 'phone_number': other_user_data.phone_number,
                 'image_url': image_url,
