@@ -22,7 +22,7 @@ from collections import deque
 
 app = Flask(__name__)
 app.config[
-    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp10_render_example_user:oaDIYQUJxqVvNXIeJlJxxlhEF85qmUd5@dpg-d6r7v4ndiees73c3o5o0-a.frankfurt-postgres.render.com/inshaapp10_render_example"
+    'SQLALCHEMY_DATABASE_URI'] = "postgresql://inshaapp11_render_example_user:7HcSGGhjZdLcgrmX8seZU2dEg66qiOnH@dpg-d6tufsvafjfc73fpdtm0-a.frankfurt-postgres.render.com/inshaapp11_render_example"
 socketio = SocketIO(app)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)  # 2️⃣ migrate second, now db exists
