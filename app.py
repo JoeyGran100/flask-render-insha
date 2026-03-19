@@ -3475,7 +3475,7 @@ def get_user_matches_for_location(location_id):
                 'image_url': image_url,
                 'status': match.status,
                 'location': match.location_id,
-                'match': match.id,  # ✅ from Doc 1
+                'match_id': match.id,  # ← rename from 'match' to 'match_id'
                 'current_server_time': get_unix_timestamp(datetime.now(timezone.utc)),
                 'visible_after': match.visible_after,
                 'round_number': match.round_number,  # ✅ from Doc 1
