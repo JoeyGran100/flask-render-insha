@@ -3578,14 +3578,94 @@ def set_preference():
         return jsonify({'error': 'Internal Server Error'}), 500
 
 
-@app.route('/matches/<email>', methods=['GET'])
-def get_user_matches(email):
-    try:
-        user = User.query.filter_by(email=email).first()
-        if not user:
-            return jsonify({'error': 'User not found'}), 404
+# @app.route('/matches/<email>', methods=['GET'])
+# def get_user_matches(email):
+#     try:
+#         user = User.query.filter_by(email=email).first()
+#         if not user:
+#             return jsonify({'error': 'User not found'}), 404
 
-        # Get all matches for this user that are visible now
+#         # Get all matches for this user that are visible now
+#         current_time = datetime.now(timezone.utc)
+#         matches = Match.query.filter(
+#             or_(
+#                 Match.user1_id == user.id,
+#                 Match.user2_id == user.id
+#             ),
+#             Match.status != 'deleted',
+#             Match.visible_after <= get_unix_timestamp(current_time)
+#         ).all()
+
+#         # Format the response
+#         result = []
+#         for match in matches:
+#             # Determine the other user ID
+#             other_user_id = match.user2_id if match.user1_id == user.id else match.user1_id
+#             other_user = User.query.get(other_user_id)
+#             other_user_data = UserProfile.query.filter_by(user_auth_id=other_user_id).first()
+
+#             if not other_user or not other_user_data:
+#                 continue
+
+#             # Get user preferences
+#             user_pref = UserPreference.query.filter_by(
+#                 user_id=user.id, preferred_user_id=other_user_id
+#             ).first()
+
+#             other_pref = UserPreference.query.filter_by(
+#                 user_id=other_user_id, preferred_user_id=user.id
+#             ).first()
+
+#             # Determine match status from user's perspective
+#             if match.status == 'active':
+#                 # Both liked each other
+#                 display_status = 'matched'
+#                 show_message_button = True
+#             else:  # status is 'pending'
+#                 if user_pref and user_pref.preference == 'save_later':
+#                     display_status = 'decide'  # User needs to decide
+#                     show_message_button = False
+#                 elif other_pref and other_pref.preference == 'save_later':
+#                     display_status = 'pending'  # Waiting for other user
+#                     show_message_button = False
+#                 else:
+#                     display_status = 'pending'  # Generic pending
+#                     show_message_button = False
+
+#             # Get profile image
+#             user_image = UserImages.query.filter_by(user_auth_id=other_user_id).first()
+#             image_url = None
+#             if user_image and user_image.imageString:
+#                 image_url = request.host_url + 'uploads/' + user_image.imageString
+
+#             # Add match to result
+#             result.append({
+#                 'match_id': match.id,
+#                 'user_id': other_user_id,
+#                 'firstname': other_user_data.firstname,
+#                 'email': other_user.email,
+#                 'age': other_user_data.age,
+#                 'bio': other_user_data.bio,
+#                 'status': display_status,
+#                 'show_message_button': show_message_button,
+#                 'match_date': match.match_date,
+#                 'image_url': image_url
+#             })
+
+#         return jsonify({'matches': result}), 200
+
+#     except Exception as e:
+#         print(f"Error in get_user_matches: {str(e)}")
+#         return jsonify({'error': 'Internal Server Error'}), 500
+
+
+@app.route('/matches/me', methods=['GET'])
+def get_user_matches():
+    user = get_current_user_from_token()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    try:
         current_time = datetime.now(timezone.utc)
         matches = Match.query.filter(
             or_(
@@ -3596,10 +3676,8 @@ def get_user_matches(email):
             Match.visible_after <= get_unix_timestamp(current_time)
         ).all()
 
-        # Format the response
         result = []
         for match in matches:
-            # Determine the other user ID
             other_user_id = match.user2_id if match.user1_id == user.id else match.user1_id
             other_user = User.query.get(other_user_id)
             other_user_data = UserProfile.query.filter_by(user_auth_id=other_user_id).first()
@@ -3607,7 +3685,6 @@ def get_user_matches(email):
             if not other_user or not other_user_data:
                 continue
 
-            # Get user preferences
             user_pref = UserPreference.query.filter_by(
                 user_id=user.id, preferred_user_id=other_user_id
             ).first()
@@ -3616,29 +3693,25 @@ def get_user_matches(email):
                 user_id=other_user_id, preferred_user_id=user.id
             ).first()
 
-            # Determine match status from user's perspective
             if match.status == 'active':
-                # Both liked each other
                 display_status = 'matched'
                 show_message_button = True
-            else:  # status is 'pending'
+            else:
                 if user_pref and user_pref.preference == 'save_later':
-                    display_status = 'decide'  # User needs to decide
+                    display_status = 'decide'
                     show_message_button = False
                 elif other_pref and other_pref.preference == 'save_later':
-                    display_status = 'pending'  # Waiting for other user
+                    display_status = 'pending'
                     show_message_button = False
                 else:
-                    display_status = 'pending'  # Generic pending
+                    display_status = 'pending'
                     show_message_button = False
 
-            # Get profile image
             user_image = UserImages.query.filter_by(user_auth_id=other_user_id).first()
             image_url = None
             if user_image and user_image.imageString:
                 image_url = request.host_url + 'uploads/' + user_image.imageString
 
-            # Add match to result
             result.append({
                 'match_id': match.id,
                 'user_id': other_user_id,
