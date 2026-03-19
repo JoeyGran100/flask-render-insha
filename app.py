@@ -231,12 +231,15 @@ class Match(db.Model):
     user2_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
     match_date = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     visible_after = db.Column(db.Integer)
-    status = db.Column(db.String(20), default='pending')  # 'pending', 'active', 'deleted'
+    status = db.Column(db.String(20), default='pending')  # 'active or expired'
+    consent = db.Column(db.String(20), default='pending')  # 'pending', 'active', 'deleted'
     location_id = db.Column(db.Integer, db.ForeignKey('locationInfo.id'), nullable=True)
+    matched_expired = db.Column(db.Boolean, default=False)  # <-- New boolean column
+    round_number = db.Column(db.Integer, default=1)  # 🆕 round-robin tracking
 
     # Relationships
-    user1 = db.relationship('User', foreign_keys=[user1_id], backref=db.backref('matches_as_user1', lazy=True))
-    user2 = db.relationship('User', foreign_keys=[user2_id], backref=db.backref('matches_as_user2', lazy=True))
+    user1 = db.relationship('Task', foreign_keys=[user1_id], backref=db.backref('matches_as_user1', lazy=True))
+    user2 = db.relationship('Task', foreign_keys=[user2_id], backref=db.backref('matches_as_user2', lazy=True))
     location = db.relationship('LocationInfo', backref=db.backref('matches_at_location', lazy=True))
 
 
