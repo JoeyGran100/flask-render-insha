@@ -3684,6 +3684,9 @@ def get_user_matches():
 
             if not other_user or not other_user_data:
                 continue
+            
+            # Fetch UserInfo using the profile's id
+            other_user_info = UserInfo.query.filter_by(user_profile_id=other_user_data.id).first()
 
             user_pref = UserPreference.query.filter_by(
                 user_id=user.id, preferred_user_id=other_user_id
@@ -3717,8 +3720,8 @@ def get_user_matches():
                 'user_id': other_user_id,
                 'firstname': other_user_data.firstname,
                 'email': other_user.email,
-                'age': other_user_data.age,
-                'bio': other_user_data.bio,
+                'bio': other_user_info.bio if other_user_info else None,          # ✅ from UserInfo
+                'hobbies': other_user_info.hobbies if other_user_info else [],    # ✅ bonus
                 'status': display_status,
                 'show_message_button': show_message_button,
                 'match_date': match.match_date,
