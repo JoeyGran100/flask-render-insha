@@ -3684,9 +3684,10 @@ def get_user_matches():
 
             if not other_user or not other_user_data:
                 continue
-            
-            # Fetch UserInfo using the profile's id
+
+            # Fetch all related tables
             other_user_info = UserInfo.query.filter_by(user_profile_id=other_user_data.id).first()
+            other_user_character = UserCharacter.query.filter_by(user_profile_id=other_user_data.id).first()
 
             user_pref = UserPreference.query.filter_by(
                 user_id=user.id, preferred_user_id=other_user_id
@@ -3716,15 +3717,41 @@ def get_user_matches():
                 image_url = request.host_url + 'uploads/' + user_image.imageString
 
             result.append({
+                # Match info
                 'match_id': match.id,
-                'user_id': other_user_id,
-                'firstname': other_user_data.firstname,
-                'email': other_user.email,
-                'bio': other_user_info.bio if other_user_info else None,          # ✅ from UserInfo
-                'hobbies': other_user_info.hobbies if other_user_info else [],    # ✅ bonus
                 'status': display_status,
                 'show_message_button': show_message_button,
-                'match_date': match.match_date,
+                'match_date': match.match_date.isoformat() if match.match_date else None,
+                'location_id': match.location_id,
+
+                # UserProfile
+                'user_id': other_user_id,
+                'firstname': other_user_data.firstname,
+                'lastname': other_user_data.lastname,
+                'email': other_user.email,
+                'age': other_user_data.age,
+                'gender': other_user_data.gender,
+                'sect': other_user_data.sect,
+                'lookingfor': other_user_data.lookingfor,
+                'phone_number': other_user_data.phone_number,
+
+                # UserInfo
+                'bio': other_user_info.bio if other_user_info else None,
+                'hobbies': other_user_info.hobbies if other_user_info else [],
+                'preferences': other_user_info.preferences if other_user_info else [],
+                'alcohol_status': other_user_info.alcoholstatus if other_user_info else None,
+                'children_status': other_user_info.childrenstatus if other_user_info else None,
+                'marital_status': other_user_info.maritalstatus if other_user_info else None,
+                'smoke_status': other_user_info.smokestatus if other_user_info else None,
+                'halal_food': other_user_info.halalfood if other_user_info else None,
+
+                # UserCharacter
+                'muslim_status': other_user_character.muslimstatus if other_user_character else None,
+                'practicing': other_user_character.practicing if other_user_character else None,
+                'nationality': other_user_character.nationality if other_user_character else None,
+                'personality_type': other_user_character.personality_type if other_user_character else None,
+
+                # Image
                 'image_url': image_url
             })
 
