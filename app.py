@@ -202,7 +202,7 @@ class Attendance(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     hasAttended = db.Column(db.Boolean, default=False)
 
-    user = db.relationship('Task', backref=db.backref('attendances', lazy=True, cascade='all, delete-orphan'))
+    user = db.relationship('User', backref=db.backref('attendances', lazy=True, cascade='all, delete-orphan'))
     location = db.relationship('LocationInfo', backref=db.backref('attendances', lazy=True, cascade='all, delete-orphan'))
 
     __table_args__ = (
@@ -220,8 +220,8 @@ class UserPreference(db.Model):
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     # Relationships
-    user = db.relationship('Task', foreign_keys=[user_id], backref=db.backref('preferences', lazy=True, cascade='all, delete-orphan'))
-    preferred_user = db.relationship('Task', foreign_keys=[preferred_user_id], backref=db.backref('preferred_by', lazy=True, cascade='all, delete-orphan'))
+    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('preferences', lazy=True, cascade='all, delete-orphan'))
+    preferred_user = db.relationship('User', foreign_keys=[preferred_user_id], backref=db.backref('preferred_by', lazy=True, cascade='all, delete-orphan'))
     match = db.relationship('Match', backref=db.backref('preferences', lazy=True, cascade='all, delete-orphan'))
 
     __table_args__ = (
@@ -243,8 +243,8 @@ class Match(db.Model):
     round_number = db.Column(db.Integer, default=1)  # 🆕 round-robin tracking
 
     # Relationships
-    user1 = db.relationship('Task', foreign_keys=[user1_id], backref=db.backref('matches_as_user1', lazy=True))
-    user2 = db.relationship('Task', foreign_keys=[user2_id], backref=db.backref('matches_as_user2', lazy=True))
+    user1 = db.relationship('User', foreign_keys=[user1_id], backref=db.backref('matches_as_user1', lazy=True))
+    user2 = db.relationship('User', foreign_keys=[user2_id], backref=db.backref('matches_as_user2', lazy=True))
     location = db.relationship('LocationInfo', backref=db.backref('matches_at_location', lazy=True))
 
 
