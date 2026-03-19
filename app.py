@@ -197,13 +197,13 @@ class CheckIn(db.Model):
 class Attendance(db.Model):
     __tablename__ = 'attendance'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
-    location_id = db.Column(db.Integer, db.ForeignKey('locationInfo.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id', ondelete='CASCADE'), nullable=False)
+    location_id = db.Column(db.Integer, db.ForeignKey('locationInfo.id', ondelete='CASCADE'), nullable=False)
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     hasAttended = db.Column(db.Boolean, default=False)
 
-    user = db.relationship('User', backref=db.backref('attendances', lazy=True))
-    location = db.relationship('LocationInfo', backref=db.backref('attendances', lazy=True))
+    user = db.relationship('Task', backref=db.backref('attendances', lazy=True, cascade='all, delete-orphan'))
+    location = db.relationship('LocationInfo', backref=db.backref('attendances', lazy=True, cascade='all, delete-orphan'))
 
     __table_args__ = (
         db.UniqueConstraint('user_id', 'location_id', name='unique_user_location_attendance'),
@@ -213,15 +213,20 @@ class Attendance(db.Model):
 class UserPreference(db.Model):
     __tablename__ = 'user_preference'
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
-    preferred_user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id', ondelete='CASCADE'), nullable=False)
+    preferred_user_id = db.Column(db.Integer, db.ForeignKey('userdetails.id', ondelete='CASCADE'), nullable=False)
+    match_id = db.Column(db.Integer, db.ForeignKey('matches.id', ondelete='CASCADE'), nullable=False)
     preference = db.Column(db.String(20), nullable=False)  # 'like', 'reject', 'save_later'
     timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     # Relationships
-    user = db.relationship('User', foreign_keys=[user_id], backref=db.backref('preferences', lazy=True))
-    preferred_user = db.relationship('User', foreign_keys=[preferred_user_id],
-                                     backref=db.backref('preferred_by', lazy=True))
+    user = db.relationship('Task', foreign_keys=[user_id], backref=db.backref('preferences', lazy=True, cascade='all, delete-orphan'))
+    preferred_user = db.relationship('Task', foreign_keys=[preferred_user_id], backref=db.backref('preferred_by', lazy=True, cascade='all, delete-orphan'))
+    match = db.relationship('Match', backref=db.backref('preferences', lazy=True, cascade='all, delete-orphan'))
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'preferred_user_id', 'match_id', name='unique_user_match_preference'),
+    )
 
 
 class Match(db.Model):
